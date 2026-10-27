@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PNC NEXUS</title>
+  <link rel="icon" href="assets/img/nexus-mark.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Nunito:wght@600;700;800;900&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css?v=202610271558">
+  <link rel="stylesheet" href="onboarding.css?v=202610271558">
+  <link rel="stylesheet" href="landing.css?v=202610271558">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <a class="logo" href="#/owner">
+        <img src="assets/img/nexus-logo.png" alt="PNC NEXUS">
+      </a>
+      <nav class="nav" id="nav"></nav>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <div class="main">
+      <header class="topbar">
+        <button class="hamburger" id="hamburger" aria-label="Open menu">
+          <svg width="22" height="18" viewBox="0 0 22 18" fill="none"><path d="M1 1.5h20M1 9h20M1 16.5h20" stroke="#343C6A" stroke-width="2.2" stroke-linecap="round"/></svg>
+        </button>
+        <h1 class="page-title" id="pageTitle">Transition</h1>
+        <div class="view-switch" role="tablist" aria-label="Dashboard view">
+          <button type="button" role="tab" data-view="client">Client</button>
+          <button type="button" role="tab" data-view="advisor">Advisor</button>
+        </div>
+        <div class="topbar-right">
+          <label class="search">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="8.8" cy="8.8" r="7.3" stroke="#718EBF" stroke-width="1.8"/><path d="m14.2 14.2 4.3 4.3" stroke="#718EBF" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <input type="text" placeholder="Search clients &amp; plans">
+          </label>
+          <button class="hdr-btn" aria-label="Settings"><img src="assets/icons/hdr-gear.png" alt=""></button>
+          <button class="hdr-btn" aria-label="Notifications"><img src="assets/icons/hdr-bell.png" alt=""></button>
+          <div class="acct">
+            <button class="hdr-avatar" id="acctBtn" aria-haspopup="menu" aria-expanded="false" aria-label="Account menu"><img src="assets/icons/hdr-avatar.png" alt=""></button>
+            <div class="acct-menu" id="acctMenu" role="menu" hidden>
+              <div class="acct-who"><img src="assets/icons/hdr-avatar.png" alt=""><div><b id="acctName">Signed in</b><span id="acctEmail"></span></div></div>
+              <a href="#/profile" role="menuitem">Profile</a>
+              <a href="#/profile/preferences" role="menuitem">Settings</a>
+              <button type="button" role="menuitem" id="acctSignout" class="danger">Log out</button>
+            </div>
+          </div>
+        </div>
+        <label class="search search-mobile">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><circle cx="8.8" cy="8.8" r="7.3" stroke="#718EBF" stroke-width="1.8"/><path d="m14.2 14.2 4.3 4.3" stroke="#718EBF" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <input type="text" placeholder="Search clients &amp; plans">
+        </label>
+      </header>
+      <main class="content" id="content"></main>
+    </div>
+  </div>
+  <script src="app.js?v=202610271558"></script>
+  <script src="owner.js?v=202610271558"></script>
+  <script src="landing.js?v=202610271558"></script>
+  <script src="onboarding.js?v=202610271558"></script>
+</body>
+</html>

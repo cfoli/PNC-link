@@ -1,4 +1,4 @@
-// PNC NEXUS — Transition Navigator
+// PNC Link — Transition Navigator
 // Single-page app built from ProBank_Transition_Navigator_UI.pdf
 
 const DASH_ICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='2' y='2' width='9' height='11' rx='2.5'/%3E%3Crect x='13' y='2' width='9' height='7' rx='2.5'/%3E%3Crect x='13' y='11' width='9' height='11' rx='2.5'/%3E%3Crect x='2' y='15' width='9' height='7' rx='2.5'/%3E%3C/svg%3E";
@@ -617,7 +617,7 @@ function render() {
   const page = pages[id] ? id : 'owner';
   const meta = NAV.find((n) => n.id === page);
   document.getElementById('pageTitle').textContent = meta.title;
-  document.title = `PNC NEXUS · ${meta.title}`;
+  document.title = `PNC Link · ${meta.title}`;
   navEl.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.dataset.id === page));
   document.getElementById('content').innerHTML = pages[page](sub);
   pages[page].mount?.();

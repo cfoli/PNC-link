@@ -7,6 +7,21 @@ import {
   paths,
   teams,
   metrics,
+  successorOptions,
+  familyReadinessOptions,
+  estateStatusOptions,
+  decisionPriorityOptions,
+  caseStages,
+  stakeholderRoles,
+  stakeholderEngagementOptions,
+  defaultFamilyPlan,
+  familyBalance,
+  valuationSensitivity,
+  pathReasons,
+  routingSuggestions,
+  nextSteps,
+  transitionJourney,
+  portfolioPriority,
 } from "./domain.mjs";
 const $ = (s) => document.querySelector(s),
   app = $("#app");
@@ -38,6 +53,7 @@ const date = (v) =>
     : "Not yet";
 const state = {
   user: null,
+  servicesAvailable: true,
   cases: [],
   selected: null,
   demo: false,
@@ -46,9 +62,16 @@ const state = {
   history: [],
   chat: [],
   callback: null,
+  portfolioSearch: "",
+  portfolioStage: "All stages",
+  portfolioAttention: "All clients",
+  portfolioSort: "Attention first",
+  assistantDraft: "",
 };
 let flashTimer,
-  renderVersion = 0;
+  renderVersion = 0,
+  historyVersion = 0,
+  lastRenderedKey = "";
 function notice(message) {
   $("#notice").textContent = message;
   clearTimeout(flashTimer);
@@ -109,6 +132,12 @@ const select = (key, label, options, value, extra = "") =>
 const formEnd = (label) =>
   `<div class="form-footer"><button class="btn" ${locked()}>${label}</button><p class="form-error" role="alert"></p></div>`;
 const formData = (f) => Object.fromEntries(new FormData(f));
+const isAdvisor = () =>
+  state.demo
+    ? state.demoRole === "advisor"
+    : (state.user?.roles ?? []).includes("advisor");
+const today = () =>
+  new Date().toLocaleDateString("en-CA", { timeZone: "America/New_York" });
 function sample() {
   const p = {
     name: "James D. Bennett",
@@ -132,6 +161,14 @@ function sample() {
     advisorEmail: "advisor@example.test",
     shareWithAdvisor: true,
     outreach: "Meeting only",
+    successor: "Family successor interested",
+    familyReadiness: "Needs discussion",
+    estateStatus: "Not reviewed",
+    decisionPriorities: [
+      "Family continuity",
+      "Employee continuity",
+      "Liquidity",
+    ],
   };
   const d = newData(p);
   d.scenario = { ...defaultScenario, family: 1500000 };
@@ -146,6 +183,45 @@ function sample() {
     note: "Financials and ownership reviewed for this fictional demonstration. Confirm successor interest, document tax assumptions, and discuss family outcomes before selecting a path.",
   };
   d.qualified = true;
+  d.management = {
+    stage: "Preparation",
+    nextContact: "2026-10-30",
+    note: "Ask about successor willingness and a family meeting before considering external buyer research.",
+  };
+  d.pathDecision = {
+    path: "Family transfer",
+    reason:
+      "Explore a phased transition to the next generation while protecting personal liquidity.",
+  };
+  d.stakeholders = [
+    {
+      id: "sample-daughter",
+      name: "Morgan Bennett",
+      relationship: "Daughter",
+      role: "Active in business",
+      engagement: "Owner will introduce",
+      notes:
+        "Leads operations. Confirm interest in ownership separately from management.",
+    },
+    {
+      id: "sample-son",
+      name: "Alex Bennett",
+      relationship: "Son",
+      role: "Outside business",
+      engagement: "Not discussed",
+      notes:
+        "Discuss family expectations without assuming equal ownership is the right outcome.",
+    },
+  ];
+  d.familyPlan = {
+    ...defaultFamilyPlan,
+    businessValue: 8000000,
+    nonBusinessAssets: 2000000,
+    availableLiquidity: 1200000,
+    notes:
+      "Illustrative owner stake and personal assets; discuss control and fairness with both children.",
+  };
+
   d.referrals = [
     {
       id: "sample-referral",
@@ -170,10 +246,118 @@ function sample() {
     data: d,
   };
 }
+function samplePortfolio() {
+  const primary = sample();
+  if (state.demoRole !== "advisor") {
+    delete primary.data.management;
+    return [primary];
+  }
+  const variants = [
+    {
+      id: "sample-rivera",
+      name: "Elena Rivera",
+      business: "Rivera Specialty Foods",
+      industry: "Food & beverage",
+      trigger: "Unsolicited offer",
+      timeline: 1,
+      futureRole: "Exit fully",
+      successor: "External sale preferred",
+      familyReadiness: "Aligned",
+      estateStatus: "Review in progress",
+      stage: "Discovery",
+      meeting: true,
+      priorities:
+        "Compare the offer with other paths and fund the family's next chapter.",
+      ebitda: 2100000,
+    },
+    {
+      id: "sample-chen",
+      name: "David Chen",
+      business: "Chen Field Services",
+      industry: "Business services",
+      trigger: "Retirement",
+      timeline: 2,
+      futureRole: "Step back gradually",
+      successor: "Management successor interested",
+      familyReadiness: "Needs discussion",
+      estateStatus: "Not reviewed",
+      stage: "Specialist engagement",
+      priorities:
+        "Give the management team a path to ownership and protect employee continuity.",
+      ebitda: 3200000,
+    },
+    {
+      id: "sample-patel",
+      name: "Anika Patel",
+      business: "Patel Health Logistics",
+      industry: "Logistics",
+      trigger: "Liquidity need",
+      timeline: 0,
+      futureRole: "Exit fully",
+      successor: "External sale preferred",
+      familyReadiness: "Aligned",
+      estateStatus: "Reviewed with professional",
+      stage: "Post-transition",
+      closed: true,
+      priorities:
+        "Coordinate family distributions and investment-policy discussions after closing.",
+      ebitda: 1800000,
+    },
+  ];
+  return [
+    primary,
+    ...variants.map((v) => {
+      const p = {
+        ...primary.data.profile,
+        ...v,
+        decisionPriorities: ["Liquidity", "Employee continuity"],
+        notes: "Fictional sample for the advisor portfolio.",
+      };
+      const d = newData(p);
+      d.management = {
+        stage: v.stage,
+        nextContact: v.closed ? "2026-11-05" : "2026-10-26",
+        note: "Illustrative internal follow-up note.",
+      };
+      if (v.meeting)
+        d.meeting = {
+          topic: "Understand the unsolicited offer",
+          status: "Requested",
+          requestedAt: "2026-10-26T12:00:00Z",
+        };
+      if (v.closed) {
+        d.outcomes = { closed: true, assetsCaptured: 4500000, retained: true };
+        d.workMinutes = 90;
+        d.review = {
+          at: "2026-10-26T10:00:00Z",
+          by: "advisor@example.test",
+          note: "Fictional completed transaction. Follow up on personal income needs and family distributions.",
+        };
+        d.evidence = d.evidence.map((e) => ({
+          ...e,
+          reported: true,
+          verified: true,
+        }));
+        d.pathDecision = {
+          path: "Strategic sale",
+          reason:
+            "Fictional completed external sale; planning now focuses on life after closing.",
+        };
+      }
+      return {
+        ...primary,
+        id: v.id,
+        ownerId: v.id + "-owner",
+        ownerEmail: v.id + "@example.test",
+        data: d,
+      };
+    }),
+  ];
+}
 async function loadCases() {
   if (state.demo) {
-    state.cases = [sample()];
-    state.selected = "sample";
+    state.cases = samplePortfolio();
+    if (!current()) state.selected = "sample";
     state.metrics = metrics(state.cases);
     return;
   }
@@ -183,9 +367,11 @@ async function loadCases() {
   if (!current()) state.selected = state.cases[0]?.id ?? null;
 }
 async function loadHistory() {
-  const c = current();
+  const version = ++historyVersion,
+    c = current();
   state.chat = [];
   state.history = [];
+  state.assistantDraft = "";
   if (!c || c.mode === "specialist") return;
   if (state.demo) {
     state.history = [
@@ -195,13 +381,14 @@ async function loadHistory() {
       },
       {
         label: "Advisor reviewed the opportunity",
-        createdAt: c.data.review.at,
+        createdAt: c.data.review?.at ?? c.createdAt,
       },
       { label: "Owner created a discovery profile", createdAt: c.createdAt },
     ];
     return;
   }
   const data = await api(`/api/nexus/history?id=${encodeURIComponent(c.id)}`);
+  if (version !== historyVersion || current()?.id !== c.id) return;
   state.history = data.history;
   state.chat = data.chat;
 }
@@ -220,10 +407,10 @@ async function update(op, payload) {
   notice("Saved to the shared case record.");
 }
 function publicHeader() {
-  return `<header class="public-head"><a href="#/home"><img class="logo" src="/assets/nexus-logo.png" alt="PNC NEXUS home"></a><div class="row"><a class="btn secondary" href="#/signin">Sign in</a><a class="btn" href="#/signup">Get started</a></div></header>`;
+  return `<header class="public-head"><a href="#/home"><img class="logo" src="./assets/pnc-link-logo.svg" alt="PNC Link home"></a><div class="row"><a class="btn secondary" href="#/signin">Sign in</a><a class="btn" href="#/signup">Get started</a></div></header>${state.servicesAvailable ? "" : '<div class="demo-bar">Read-only preview · connected services are unavailable. Explore both workspaces; signing in, saving cases and live AI require connected services.</div>'}`;
 }
 function home() {
-  return `${publicHeader()}<main id="main"><section class="hero"><div><div class="eyebrow">Your business. Your next chapter.</div><h1>A thoughtful transition starts with a connected plan.</h1><p class="lead">Bring your business goals, family priorities, and advisory team together—from first questions to life beyond a sale.</p><div class="row"><a class="btn" href="#/signup">Start your transition profile <span aria-hidden="true">→</span></a>${button("Explore the sample", "demo")}</div><p class="footer-note">Owner-guided discovery. Advisor-reviewed decisions. AI support along the way.</p></div><div class="hero-visual"><img src="/assets/family.png" alt="Business owners considering their family's next chapter"><div class="hero-caption"><h3>More than a transaction.</h3><p>A common understanding of what matters, who is helping, and what happens next.</p></div></div></section><section class="home-strip"><article><div class="eyebrow">For business owners</div><h2>Know your options. Keep your voice.</h2><p>Clarify your goals, explore transition paths, model proceeds, and approve what specialists can see. Ask the AI assistant for help preparing your next conversation.</p></article><article><div class="eyebrow">For advisors</div><h2>Turn discovery into coordinated action.</h2><p>Review the same case, verify readiness evidence, qualify opportunities, and coordinate acknowledged specialist handoffs and wealth-planning tasks.</p></article></section></main>`;
+  return `${publicHeader()}<main id="main"><section class="hero"><div><div class="eyebrow">Your business. Your next chapter.</div><h1>A thoughtful transition starts with a connected plan.</h1><p class="lead">Bring your business goals, family priorities, and advisory team together—from first questions to life beyond a sale.</p><div class="row"><a class="btn" href="#/signup">Start your transition profile <span aria-hidden="true">→</span></a>${button("Explore the sample", "demo")}</div><p class="footer-note">Owner-guided discovery. Advisor-reviewed decisions. AI support along the way.</p><a class="text-link" href="#/resources">Explore the research behind PNC Link →</a></div><div class="hero-visual"><img src="./assets/family.png" alt="Business owners considering their family's next chapter"><div class="hero-caption"><h3>More than a transaction.</h3><p>A common understanding of what matters, who is helping, and what happens next.</p></div></div></section><section class="home-strip"><article><div class="eyebrow">For business owners</div><h2>Know your options. Keep your voice.</h2><p>Explore transition paths, prepare your family, model liquidity, and control specialist sharing. Your AI assistant helps you prepare for a trusted human conversation.</p>${button("Explore the owner journey", "demo", "secondary small")}</article><article><div class="eyebrow">For relationship advisors</div><h2>See the whole relationship.</h2><p>Manage your client portfolio, surface cases that need attention, map family relationships, and coordinate the next step across PNC teams.</p>${button("Explore the advisor workspace", "demoAdvisor", "secondary small")}</article></section><section class="research-strip"><div><div class="eyebrow">Why connected advice matters</div><h2>Business decisions are personal decisions.</h2><p>PNC’s 2026 research found that 89% of surveyed owners value advice integrating business and personal needs; 55% currently use one advisor for both.</p><a href="https://pnc.mediaroom.com/2026-04-01-PNC-Private-Bank-Research-Reveals-Business-Owners-Increasingly-Want-Integrated-Financial-Advice-to-Help-Align-Business,-Personal-Goals" target="_blank" rel="noopener noreferrer">Read the PNC research ↗</a><small>300 U.S. private business owners and co-owners; surveyed Nov–Dec 2025. Research supports the problem, not this product’s effectiveness.</small></div><div class="research-number"><b>One relationship.</b><span>Business + family + personal wealth</span></div></section><footer class="public-footer">PNC Link · Case competition concept · Not an official PNC service</footer></main>`;
 }
 function authPage(kind) {
   const signup = kind === "signup",
@@ -238,6 +425,7 @@ function navItems(c) {
       ["referrals", "My referrals", "02"],
     ];
   return [
+    ...(isAdvisor() ? [["portfolio", "Client portfolio", "↗"]] : []),
     [
       "overview",
       c?.mode === "advisor" ? "Case overview" : "My transition",
@@ -246,15 +434,14 @@ function navItems(c) {
     ["discovery", "Discovery profile", "02"],
     ["readiness", "Readiness & review", "03"],
     ["pathways", "Transition options", "04"],
-    ["proceeds", "Proceeds & wealth", "05"],
-    ["referrals", "Specialist referrals", "06"],
-    ["plan", "Shared action plan", "07"],
-    ["assistant", "AI assistant", "08"],
+    ["family", "Family & legacy", "05"],
+    ["proceeds", "Proceeds & wealth", "06"],
+    ["referrals", "Specialist referrals", "07"],
+    ["plan", "Shared action plan", "08"],
+    ["assistant", "AI assistant", "✧"],
     ["history", "Case history", "09"],
-    ...((state.user?.roles ?? []).includes("advisor") ||
-    (state.demoRole === "advisor" && state.demo)
-      ? [["metrics", "Practice insights", "10"]]
-      : []),
+    ...(isAdvisor() ? [["metrics", "Practice insights", "10"]] : []),
+    ["resources", "Planning resources", "↗"],
   ];
 }
 function shell(body, r) {
@@ -262,7 +449,7 @@ function shell(body, r) {
     mode =
       c?.mode ??
       ((state.user?.roles ?? []).includes("advisor") ? "advisor" : "owner");
-  return `<div class="shell"><aside class="sidebar"><a class="brand-box" href="#/overview"><img class="logo" src="/assets/nexus-logo.png" alt="PNC NEXUS home"></a><p class="side-label">${mode === "advisor" ? "Advisor workspace" : mode === "specialist" ? "Specialist workspace" : "Owner workspace"}</p><nav aria-label="Workspace">${navItems(
+  return `<div class="shell"><aside class="sidebar"><a class="brand-box" href="#/overview"><img class="logo" src="./assets/pnc-link-logo.svg" alt="PNC Link home"></a><p class="side-label">${mode === "advisor" ? "Advisor workspace" : mode === "specialist" ? "Specialist workspace" : "Owner workspace"}</p><nav aria-label="Workspace">${navItems(
     c,
   )
     .map(
@@ -271,7 +458,7 @@ function shell(body, r) {
     )
     .join(
       "",
-    )}</nav><div class="side-bottom">One case. A connected team.<br>Human judgment at every decision.<br><a href="#/home">About NEXUS</a></div></aside><div class="content"><header class="topbar"><div><strong>${state.demo ? "Illustrative sample" : esc(state.user?.name || state.user?.email)}</strong><small>${mode === "owner" ? "Business owner" : mode === "advisor" ? "Relationship advisor" : "Approved referral recipient"}</small></div><div class="row">${state.cases.length > 1 ? `<label><span class="eyebrow">Case</span><select id="caseSelect" aria-label="Select case">${state.cases.map((x) => `<option value="${esc(x.id)}" ${x.id === state.selected ? "selected" : ""}>${esc(x.data.profile.business)}</option>`).join("")}</select></label>` : ""}${!state.demo ? button("Refresh", "refresh", "secondary small") + button("Sign out", "logout", "quiet small") : ""}</div></header>${state.demo ? `<div class="demo-bar"><span>Read-only sample · fictional business · no requests are sent</span><div class="row">${button(state.demoRole === "owner" ? "View as advisor" : "View as owner", "demoSwitch", "secondary small")}<a class="btn small" href="#/signup">Create your case</a></div></div>` : ""}<main class="main" id="main">${body}<p class="footer-note">Planning support only. Financial ranges use hypothetical assumptions; they are not certified valuations or PNC benchmarks. Qualified professionals review transaction, financing, tax, legal, and investment decisions.</p></main></div></div>`;
+    )}</nav><div class="side-bottom">Business. Family. What comes next.<br>Human judgment at every decision.<br><a href="#/home">About PNC Link</a></div></aside><div class="content"><header class="topbar"><div><strong>${state.demo ? "Illustrative sample" : esc(state.user?.name || state.user?.email)}</strong><small>${mode === "owner" ? "Business owner" : mode === "advisor" ? "Relationship advisor" : "Approved referral recipient"}</small></div><div class="row">${state.cases.length > 1 ? `<label><span class="eyebrow">Case</span><select id="caseSelect" aria-label="Select case">${state.cases.map((x) => `<option value="${esc(x.id)}" ${x.id === state.selected ? "selected" : ""}>${esc(x.data.profile.business)}</option>`).join("")}</select></label>` : ""}${!state.demo ? button("Refresh", "refresh", "secondary small") + button("Sign out", "logout", "quiet small") : ""}</div></header>${state.demo ? `<div class="demo-bar"><span>Read-only sample · fictional clients · no requests are sent</span><div class="row">${button(state.demoRole === "owner" ? "View as advisor" : "View as owner", "demoSwitch", "secondary small")}<a class="btn small" href="#/signup">Create your case</a></div></div>` : ""}<main class="main" id="main">${body}<p class="footer-note workspace-disclosure">PNC Link is a case competition concept, not an official PNC service. Planning support only. Financial ranges use hypothetical assumptions; they are not certified valuations or PNC benchmarks. Qualified professionals review transaction, financing, tax, legal, and investment decisions.</p></main></div></div>`;
 }
 function noCase() {
   const advisor = (state.user?.roles ?? []).some((r) =>
@@ -280,17 +467,96 @@ function noCase() {
   return `${intro(advisor ? "Your workspace is ready." : "Begin with what matters.", "A shared transition profile connects the owner’s priorities with the right people and next steps.")}<div class="two-col">${panel(advisor ? "No shared cases yet" : "Create your transition profile", `<p>${advisor ? "Owners can name your account email as their advisor and explicitly share their case. Specialist cases appear after owner approval of a referral addressed to your email." : "Start with your goals, business facts, family priorities, and preferred advisor. You can update the profile as your thinking develops."}</p><a class="btn" href="#/discovery">${advisor ? "Create my own owner case" : "Start discovery"}</a>`)}${panel("What happens next", '<ol class="info-list"><li>Owner records goals and evidence availability.</li><li>Assigned advisor reviews and verifies the case.</li><li>Owner approves each specialist and scope.</li><li>Named recipient acknowledges the referral.</li></ol>')}</div>`;
 }
 function stages(c) {
-  const d = c.data,
-    active = d.outcomes.closed
-      ? 4
-      : d.referrals.some((r) => r.status === "Completed")
-        ? 3
-        : d.referrals.some((r) => r.acceptedAt)
-          ? 2
-          : d.review
-            ? 1
-            : 0;
-  return `<div class="progress" aria-label="Journey progress">${["Discover", "Review", "Coordinate", "Execute", "Beyond closing"].map((x, i) => `<div class="stage ${i <= active ? "active" : ""}"><i>0${i + 1}</i>${x}</div>`).join("")}</div>`;
+  return `<div class="progress" aria-label="Journey progress">${transitionJourney(
+    c.data,
+  )
+    .map(
+      (step, i) =>
+        `<a href="#/${esc(step.route)}" class="stage ${step.status === "Complete" || step.status === "Current" ? "active" : ""}" ${step.status === "Current" ? 'aria-current="step"' : ""}><i>0${i + 1} · ${esc(step.status)}</i>${esc(step.label)}</a>`,
+    )
+    .join("")}</div>`;
+}
+function contextAssistant(question, label = "Ask AI for help") {
+  return `<button type="button" class="btn ai-button small" data-ask="${esc(question)}"><span aria-hidden="true">✧</span> ${esc(label)}</button>`;
+}
+function nextStepPanel(c) {
+  const steps = nextSteps(c.data, c.mode).slice(0, 4);
+  return panel(
+    c.mode === "advisor" ? "Next best actions to review" : "Your next steps",
+    `<div class="next-steps">${steps.map((step, i) => `<a href="#/${esc(step.route)}" class="next-step"><span class="step-number">${i + 1}</span><div><b>${esc(step.title)}</b><p>${esc(step.detail)}</p></div><span aria-hidden="true">↗</span></a>`).join("")}</div><div class="row">${contextAssistant(c.mode === "advisor" ? "Prepare a concise advisor meeting brief: owner goals, family dynamics, missing evidence, open decisions and three next actions. Separate known facts from questions." : "Help me understand my next three steps using my business goals and family priorities.", "Prepare my next conversation")} ${button("Download meeting brief", "downloadBrief", "quiet small")}</div>`,
+    "Based on recorded facts and transparent workflow rules. Review before acting.",
+  );
+}
+function managementPanel(c) {
+  if (c.mode !== "advisor") return "";
+  const m = c.data.management ?? {
+    stage: "Discovery",
+    nextContact: "",
+    note: "",
+  };
+  return panel(
+    "Relationship follow-up",
+    `<p class="privacy-note">Advisor only · these notes are excluded from the owner and specialist views.</p><form data-form="caseManagement" class="inline-form">${select("stage", "Relationship stage", caseStages, m.stage)}${input("nextContact", "Next contact date", m.nextContact, "date")}${textarea("note", "Internal relationship note", m.note, 'maxlength="2000"')}${formEnd("Save relationship follow-up")}</form>`,
+  );
+}
+function portfolio() {
+  const rows = state.cases.filter((c) => c.mode === "advisor");
+  const priorities = rows.map((c) => ({
+    c,
+    attention: portfolioPriority(c, today()),
+  }));
+  const pending = priorities.filter(
+    ({ attention }) => attention.level === "High",
+  );
+  return `${intro("A clearer view of every client.", "See who needs a conversation, understand why, and move from a signal to a coordinated next step.", "Advisor command center")}<div class="stats">${stat("Assigned clients", rows.length, "Shared with your advisor account", true)}${stat("Needs attention", pending.length, "Meetings, due actions or follow-up")}${stat("Awaiting review", rows.filter((c) => !c.data.review).length, "Owner discovery to review")}${stat("Open handoffs", rows.flatMap((c) => c.data.referrals).filter((r) => ["Draft", "Queued", "Accepted"].includes(r.status)).length, "Across assigned clients")}</div><section class="panel attention-panel"><div class="panel-head"><div><div class="eyebrow">Relationship signals</div><h2>Start with the conversations that matter.</h2><p>Signals use recorded dates, requests and family context. They do not predict an owner’s intent or authorize outreach.</p></div>${badge("Explainable workflow rules", "gray")}</div><div class="attention-grid">${
+    pending
+      .slice(0, 3)
+      .map(
+        ({ c, attention }) =>
+          `<article class="attention-card"><div class="row between">${badge("Needs attention", "amber")}<small>${esc(c.data.profile.outreach || "On request")}</small></div><h3>${esc(c.data.profile.business)}</h3><p>${esc(attention.reasons.join(" · "))}</p>${button("Review client →", "openCase", "secondary small", `data-id="${esc(c.id)}"`)}</article>`,
+      )
+      .join("") ||
+    empty(
+      "No urgent signals recorded",
+      "Set follow-up dates and review shared actions to keep the relationship moving.",
+    )
+  }</div></section><section class="panel section-gap"><div class="panel-head"><div><h2>Client portfolio</h2><small>Only cases explicitly shared with your advisor account appear here.</small></div></div><div class="portfolio-controls"><div class="field"><label for="portfolio-search">Search clients</label><input id="portfolio-search" type="search" value="${esc(state.portfolioSearch)}" placeholder="Owner, business or industry"></div><div class="field"><label for="portfolio-stage">Stage</label><select id="portfolio-stage">${["All stages", ...caseStages].map((x) => `<option ${state.portfolioStage === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div><div class="field"><label for="portfolio-attention">Attention</label><select id="portfolio-attention">${["All clients", "Needs attention", "Awaiting review"].map((x) => `<option ${state.portfolioAttention === x ? "selected" : ""}>${x}</option>`).join("")}</select></div><div class="field"><label for="portfolio-sort">Sort by</label><select id="portfolio-sort">${["Attention first", "Recently updated", "Business name"].map((x) => `<option ${state.portfolioSort === x ? "selected" : ""}>${x}</option>`).join("")}</select></div></div><div id="portfolio-results">${portfolioResults()}</div></section>`;
+}
+function portfolioResults() {
+  const query = state.portfolioSearch.trim().toLowerCase();
+  const rows = state.cases
+    .filter((c) => c.mode === "advisor")
+    .map((c) => ({ c, a: portfolioPriority(c, today()) }))
+    .filter(({ c, a }) => {
+      const p = c.data.profile;
+      return (
+        (!query ||
+          [p.name, p.business, p.industry].some((v) =>
+            String(v ?? "")
+              .toLowerCase()
+              .includes(query),
+          )) &&
+        (state.portfolioStage === "All stages" ||
+          a.stage === state.portfolioStage) &&
+        (state.portfolioAttention === "All clients" ||
+          (state.portfolioAttention === "Needs attention"
+            ? a.level === "High"
+            : !c.data.review))
+      );
+    });
+  rows.sort((x, y) =>
+    state.portfolioSort === "Business name"
+      ? x.c.data.profile.business.localeCompare(y.c.data.profile.business)
+      : state.portfolioSort === "Recently updated"
+        ? Date.parse(y.c.updatedAt) - Date.parse(x.c.updatedAt)
+        : (x.a.level === "High" ? 0 : 1) - (y.a.level === "High" ? 0 : 1) ||
+          x.c.data.profile.business.localeCompare(y.c.data.profile.business),
+  );
+  return `<p class="result-count" role="status">${rows.length} client${rows.length === 1 ? "" : "s"} shown</p>${rows.length ? `<div class="table-wrap"><table class="client-table"><caption class="sr-only">Assigned client portfolio and next steps</caption><thead><tr><th>Client relationship</th><th>Stage & evidence</th><th>Needs a conversation</th><th>Next contact</th><th>Open case</th></tr></thead><tbody>${rows.map(({ c, a }) => `<tr><td><b>${esc(c.data.profile.business)}</b><small>${esc(c.data.profile.name)} · ${esc(c.data.profile.industry)}</small></td><td>${badge(a.stage, "gray")}<small>${readiness(c.data).verified}/${readiness(c.data).total} evidence categories verified</small></td><td>${badge(a.label, a.level === "High" ? "amber" : "")}<small>${esc(a.reasons[0] || c.data.profile.trigger)} · ${a.openActions} open actions</small></td><td>${esc(a.nextContact || "Not scheduled")}<small>${esc(c.data.profile.outreach || "On request")}</small></td><td>${button("Open client", "openCase", "secondary small", `data-id="${esc(c.id)}"`)} ${button("AI brief", "caseBrief", "quiet small", `data-id="${esc(c.id)}"`)}</td></tr>`).join("")}</tbody></table></div>` : empty("No clients match", "Clear search or choose another filter. New client cases appear when an owner explicitly shares them with your invited account.")}`;
+}
+function resources() {
+  const content = `${intro("A stronger plan starts with better questions.", "Use PNC’s published research to frame conversations about business, family and personal wealth.", "Planning resources")}<div class="resource-grid"><article class="panel"><div class="eyebrow">Integrated advice · April 2026</div><h2>Bring the business and personal plan together.</h2><p>PNC’s owner research highlights demand for connected advice and barriers to succession planning. It informs the problem we address; customer interviews must still test this solution.</p><a class="btn secondary small" target="_blank" rel="noopener noreferrer" href="https://pnc.mediaroom.com/2026-04-01-PNC-Private-Bank-Research-Reveals-Business-Owners-Increasingly-Want-Integrated-Financial-Advice-to-Help-Align-Business,-Personal-Goals">Read the research ↗</a><small class="resource-note">Ipsos online survey of 300 U.S. private business owners/co-owners, Nov 19–Dec 10, 2025. Revenue cohorts: $10–50M and $50–125M.</small></article><article class="panel"><div class="eyebrow">Family continuity · November 2024</div><h2>Fairness, ownership and liquidity can differ.</h2><p>PNC’s estate equalization article explores differing family roles and illiquid business interests. Use it to prepare questions for estate and insurance specialists; no single allocation fits every family.</p><a class="btn secondary small" target="_blank" rel="noopener noreferrer" href="https://www.pnc.com/insights/wealth-management/business-continuity-and-succession-planning/estate-equalization-through-life-insurance.html">Explore estate equalization ↗</a></article><article class="panel"><div class="eyebrow">PNC capabilities</div><h2>Connect existing expertise around the owner.</h2><p>PNC’s corporate profile describes banking, business advisory and asset-management services. PNC Link proposes a shared workflow across that ecosystem; the prototype does not connect to internal PNC systems.</p><a class="btn secondary small" target="_blank" rel="noopener noreferrer" href="https://www.pnc.com/en/about-pnc/media/facts-about-pnc.html">View Facts About PNC ↗</a></article></div><section class="panel section-gap"><h2>Questions to take into your next meeting</h2><ul class="info-list"><li>Who wants to operate the business, and who wants an ownership interest?</li><li>How do liquidity, legacy, employee continuity and retained control rank for you?</li><li>What information would you want reviewed before choosing a path?</li><li>How should personal wealth and family conversations begin before a transition?</li></ul>${state.user || state.demo ? contextAssistant("Help me prepare questions for a family business transition, using my recorded priorities and PNC's estate equalization resource.", "Prepare questions with AI") : '<a class="btn" href="#/signup">Start your transition profile</a>'}</section>`;
+  return content;
 }
 function overview(c) {
   if (!c) return noCase();
@@ -300,7 +566,7 @@ function overview(c) {
     p = d.profile,
     r = readiness(d),
     s = proceeds(p, d.scenario);
-  return `${intro(esc(p.business), "A common record of your goals, evidence, decisions, and the people helping you move forward.", `${c.mode === "advisor" ? "Advisor case" : "Owner journey"} · ${esc(p.industry)}`)}<div class="row">${badge(d.review ? "Advisor reviewed" : "Awaiting advisor review", d.review ? "" : "amber")}${badge(d.qualified ? "Qualified opportunity" : "Discovery in progress", "gray")}${badge(`Revision ${c.revision}`, "gray")}</div>${stages(c)}<div class="stats">${stat("Evidence available", `${r.score}%`, `${r.reported} of ${r.total} categories`, true)}${stat("Advisor verified", `${r.verified}/${r.total}`, "Evidence categories")}${stat("Working enterprise value", money(s.ev), "Hypothetical multiple × EBITDA")}${stat("Estimated cash proceeds", money(s.cash), s.shortfall ? "Distribution exceeds available cash" : "After simplified deductions")}</div><div class="two-col"><div class="stack">${panel("What matters to the owner", `<div class="row">${badge(p.trigger)}${badge(`${p.timeline}-year horizon`, "gray")}${badge(p.futureRole, "gray")}</div><p class="review-note">${esc(p.priorities || "Family and legacy priorities have not been recorded.")}</p><p><strong>Employee priorities</strong><br>${esc(p.employeePriorities || "Not yet recorded")}</p><p><strong>Liquidity goal</strong> ${money(p.liquidity)} · <strong>Desired retained ownership</strong> ${p.retained}%</p><a class="btn secondary small" href="#/discovery">${c.mode === "owner" ? "Update discovery" : "View discovery"}</a>`)}${panel("Advisor review", d.review ? `<p class="review-note">${esc(d.review.note)}</p><small>Recorded ${date(d.review.at)} · ${esc(d.review.by)}</small>` : `<p>${p.advisorEmail ? "Your named advisor can review this profile and record next steps." : "Add your advisor’s email and sharing permission in Discovery to start the handoff."}</p><a class="btn secondary small" href="#/readiness">Open review</a>`)}</div><div class="stack">${panel("Your next conversation", `${d.meeting ? `<p><strong>${esc(d.meeting.topic)}</strong><br>${badge(d.meeting.status)}</p><small>Requested ${date(d.meeting.requestedAt)}</small>` : empty("Align on the next step", "Discuss the transition trigger, missing evidence, and owner outcomes before selecting a path.")}${c.mode === "owner" && !d.meeting ? `<form data-form="meeting" class="inline-form">${input("topic", "Meeting topic", "Discuss my transition priorities", "text", 'required maxlength="500"')}${formEnd("Request advisor meeting")}</form>` : c.mode === "advisor" && d.meeting && d.meeting.status !== "Completed" ? button(d.meeting.status === "Requested" ? "Acknowledge request" : "Mark meeting completed", "meetingStatus", "", `data-status="${d.meeting.status === "Requested" ? "Acknowledged" : "Completed"}" ${locked()}`) : ""}`)}${panel("Still to verify", r.gaps.length ? `<ul class="info-list">${r.gaps.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><p class="footer-note">This is evidence completeness, not a prediction of transaction success.</p>` : "<p>All checklist categories are verified. Your advisor still reviews the conclusions and transaction suitability.</p>")}</div></div>`;
+  return `${intro(esc(p.business), "A common record of your goals, evidence, decisions, and the people helping you move forward.", `${c.mode === "advisor" ? "Advisor case" : "Owner journey"} · ${esc(p.industry)}`)}<div class="row">${badge(d.review ? "Advisor reviewed" : "Awaiting advisor review", d.review ? "" : "amber")}${badge(d.qualified ? "Qualified opportunity" : "Discovery in progress", "gray")}${badge(`Revision ${c.revision}`, "gray")}</div>${stages(c)}${nextStepPanel(c)}<div class="stats section-gap">${stat("Evidence available", `${r.score}%`, `${r.reported} of ${r.total} categories`, true)}${stat("Advisor verified", `${r.verified}/${r.total}`, "Evidence categories")}${stat("Working enterprise value", money(s.ev), "Hypothetical multiple × EBITDA")}${stat("Estimated cash proceeds", money(s.cash), s.shortfall ? "Distribution exceeds available cash" : "After simplified deductions")}</div><div class="two-col"><div class="stack">${panel("What matters to the owner", `<div class="row">${badge(p.trigger)}${badge(`${p.timeline}-year horizon`, "gray")}${badge(p.futureRole, "gray")}</div><p class="review-note">${esc(p.priorities || "Family and legacy priorities have not been recorded.")}</p><p><strong>Employee priorities</strong><br>${esc(p.employeePriorities || "Not yet recorded")}</p><p><strong>Liquidity goal</strong> ${money(p.liquidity)} · <strong>Desired retained ownership</strong> ${p.retained}%</p><a class="btn secondary small" href="#/discovery">${c.mode === "owner" ? "Update discovery" : "View discovery"}</a>`)}${panel("Advisor review", d.review ? `<p class="review-note">${esc(d.review.note)}</p><small>Recorded ${date(d.review.at)} · ${esc(d.review.by)}</small>` : `<p>${p.advisorEmail ? "Your named advisor can review this profile and record next steps." : "Add your advisor’s email and sharing permission in Discovery to start the handoff."}</p><a class="btn secondary small" href="#/readiness">Open review</a>`)}</div><div class="stack">${panel("Your next conversation", `${d.meeting ? `<p><strong>${esc(d.meeting.topic)}</strong><br>${badge(d.meeting.status)}</p><small>Requested ${date(d.meeting.requestedAt)}</small>` : empty("Align on the next step", "Discuss the transition trigger, missing evidence, and owner outcomes before selecting a path.")}${c.mode === "owner" && !d.meeting ? `<form data-form="meeting" class="inline-form">${input("topic", "Meeting topic", "Discuss my transition priorities", "text", 'required maxlength="500"')}${formEnd("Request advisor meeting")}</form>` : c.mode === "advisor" && d.meeting && d.meeting.status !== "Completed" ? button(d.meeting.status === "Requested" ? "Acknowledge request" : "Mark meeting completed", "meetingStatus", "", `data-status="${d.meeting.status === "Requested" ? "Acknowledged" : "Completed"}" ${locked()}`) : ""}`)}${panel("Still to verify", r.gaps.length ? `<ul class="info-list">${r.gaps.map((x) => `<li>${esc(x)}</li>`).join("")}</ul><p class="footer-note">This is evidence completeness, not a prediction of transaction success.</p>` : "<p>All checklist categories are verified. Your advisor still reviews the conclusions and transaction suitability.</p>")}</div></div>${managementPanel(c)}`;
 }
 function discovery(c) {
   const p = c?.data.profile ?? {
@@ -320,7 +586,7 @@ function discovery(c) {
     },
     editable = !c || c.mode === "owner",
     disabled = !editable || state.demo ? "disabled" : "";
-  return `${intro("The full picture starts here.", "Capture the business facts and personal priorities that shape a transition. Your answers feed the shared assessment and proceeds model.")}<section class="panel"><form data-form="profile"><fieldset ${disabled} class="profile-fields"><div class="form-grid">${input("name", "Owner name", p.name, "text", 'required maxlength="200"')}${input("business", "Business name", p.business, "text", 'required maxlength="200"')}${input("industry", "Industry", p.industry, "text", 'required maxlength="200"')}${select("trigger", "What brings you here?", ["Not sure yet", "Retirement", "Family succession", "Unsolicited offer", "Liquidity need", "Partner change", "Growth capital"], p.trigger)}${input("timeline", "Years until preferred transition", p.timeline, "number", 'required min="0" max="30" step="0.5"')}${select("futureRole", "Your desired future role", ["Not sure yet", "Exit fully", "Step back gradually", "Continue leading"], p.futureRole)}<div class="section-label">Business and liquidity</div>${input("revenue", "Annual revenue ($)", p.revenue, "number", 'required min="0" max="1000000000000" step="1"')}${input("ebitda", "Annual EBITDA ($)", p.ebitda, "number", 'required min="0" max="1000000000000" step="1"', "Use a consistent annual period. The simple multiple model supports nonnegative EBITDA only.")}${input("debt", "Outstanding business debt ($)", p.debt, "number", 'required min="0" max="1000000000000" step="1"')}${input("ownership", "Your current ownership (%)", p.ownership, "number", 'required min="0.01" max="100" step="0.01"')}${input("liquidity", "Desired personal liquidity ($)", p.liquidity, "number", 'required min="0" max="1000000000000" step="1"')}${input("retained", "Desired retained ownership after transition (%)", p.retained, "number", 'required min="0" max="100" step="1"')}<div class="section-label">People, legacy, and trust</div>${textarea("priorities", "Family and legacy priorities", p.priorities, 'maxlength="1000"')}${textarea("employeePriorities", "Employee and management priorities", p.employeePriorities, 'maxlength="1000"')}${textarea("confidentiality", "Confidentiality requirements", p.confidentiality, 'maxlength="1000"')}${select("outreach", "Preferred engagement", ["On request", "Email with permission", "Meeting only"], p.outreach)}${input("advisorEmail", "Assigned advisor email (optional)", p.advisorEmail, "email", 'maxlength="254"', "Use your advisor’s invited account email. Only that account with the advisor role can open the full case.")}${textarea("notes", "Other context and open questions", p.notes)}<label class="check field full"><input name="shareWithAdvisor" type="checkbox" ${p.shareWithAdvisor ? "checked" : ""}><span>I allow the named advisor to access this full case, including family and personal planning context. Changing or removing the advisor revokes their access. Specialist sharing requires separate approval.</span></label></div></fieldset>${editable ? `<div class="callout amber"><p>Changing discovery, evidence availability, or scenario assumptions clears the review and withdraws existing referrals so updated information receives fresh approval. Completed referral milestones remain in the history.</p></div>${formEnd(c ? "Save discovery profile" : "Create shared case")}` : '<p class="footer-note">The owner maintains discovery answers. Record your findings in Readiness & review.</p>'}</form></section>`;
+  return `${intro("The full picture starts here.", "Capture the business facts and personal priorities that shape a transition. Your answers feed the shared assessment and proceeds model.")}<section class="panel"><form data-form="profile"><fieldset ${disabled} class="profile-fields"><div class="form-grid">${input("name", "Owner name", p.name, "text", 'required maxlength="200"')}${input("business", "Business name", p.business, "text", 'required maxlength="200"')}${input("industry", "Industry", p.industry, "text", 'required maxlength="200"')}${select("trigger", "What brings you here?", ["Not sure yet", "Retirement", "Family succession", "Unsolicited offer", "Liquidity need", "Partner change", "Growth capital"], p.trigger)}${input("timeline", "Years until preferred transition", p.timeline, "number", 'required min="0" max="30" step="0.5"')}${select("futureRole", "Your desired future role", ["Not sure yet", "Exit fully", "Step back gradually", "Continue leading"], p.futureRole)}<div class="section-label">Business and liquidity</div>${input("revenue", "Annual revenue ($)", p.revenue, "number", 'required min="0" max="1000000000000" step="1"')}${input("ebitda", "Annual EBITDA ($)", p.ebitda, "number", 'required min="0" max="1000000000000" step="1"', "Use a consistent annual period. The simple multiple model supports nonnegative EBITDA only.")}${input("debt", "Outstanding business debt ($)", p.debt, "number", 'required min="0" max="1000000000000" step="1"')}${input("ownership", "Your current ownership (%)", p.ownership, "number", 'required min="0.01" max="100" step="0.01"')}${input("liquidity", "Desired personal liquidity ($)", p.liquidity, "number", 'required min="0" max="1000000000000" step="1"')}${input("retained", "Desired retained ownership after transition (%)", p.retained, "number", 'required min="0" max="100" step="1"')}<div class="section-label">People, legacy, and trust</div>${select("successor", "Successor readiness", successorOptions, p.successor ?? successorOptions[0])}${select("familyReadiness", "Family alignment", familyReadinessOptions, p.familyReadiness ?? familyReadinessOptions[0])}${select("estateStatus", "Estate and succession review", estateStatusOptions, p.estateStatus ?? estateStatusOptions[0])}<fieldset class="priority-choices field full"><legend>What matters most in this decision?</legend><div class="row">${decisionPriorityOptions.map((x) => `<label class="check"><input type="checkbox" name="decisionPriorities" value="${esc(x)}" ${(p.decisionPriorities ?? []).includes(x) ? "checked" : ""}>${esc(x)}</label>`).join("")}</div></fieldset>${textarea("priorities", "Family and legacy priorities", p.priorities, 'maxlength="1000"')}${textarea("employeePriorities", "Employee and management priorities", p.employeePriorities, 'maxlength="1000"')}${textarea("confidentiality", "Confidentiality requirements", p.confidentiality, 'maxlength="1000"')}${select("outreach", "Preferred engagement", ["On request", "Email with permission", "Meeting only"], p.outreach)}${input("advisorEmail", "Assigned advisor email (optional)", p.advisorEmail, "email", 'maxlength="254"', "Use your advisor’s invited account email. Only that account with the advisor role can open the full case.")}${textarea("notes", "Other context and open questions", p.notes)}<label class="check field full"><input name="shareWithAdvisor" type="checkbox" ${p.shareWithAdvisor ? "checked" : ""}><span>I allow the named advisor to access this full case, including family and personal planning context. Changing or removing the advisor revokes their access. Specialist sharing requires separate approval.</span></label></div></fieldset>${editable ? `<div class="callout amber"><p>Changing discovery, evidence availability, or scenario assumptions clears the review and withdraws existing referrals so updated information receives fresh approval. Completed referral milestones remain in the history.</p></div>${formEnd(c ? "Save discovery profile" : "Create shared case")}` : '<p class="footer-note">The owner maintains discovery answers. Record your findings in Readiness & review.</p>'}</form></section>`;
 }
 function readinessPage(c) {
   const d = c.data,
@@ -328,8 +594,64 @@ function readinessPage(c) {
   return `${intro("Evidence before conclusions.", "Track what is available, what the advisor has verified, and what still needs a conversation. No files are uploaded here.")}<div class="stats">${stat("Owner-reported availability", `${r.score}%`, `${r.reported}/${r.total} categories`, true)}${stat("Advisor verification", `${r.verifiedScore}%`, `${r.verified}/${r.total} categories`)}${stat("Review", d.review ? "Recorded" : "Pending", "Human findings and next steps")}${stat("Opportunity", d.qualified ? "Qualified" : "Discovery", "Advisor determination")}</div><div class="two-col">${panel("Readiness evidence", `<div class="checklist">${d.evidence.map((e) => `<div class="check-row"><div><b>${esc(e.label)}</b><small>${e.verified ? "Advisor verified" : e.reported ? "Available; verification pending" : "Not yet confirmed"}</small></div><div class="row"><label class="check"><input type="checkbox" data-evidence="${esc(e.label)}" ${e.reported ? "checked" : ""} ${c.mode !== "owner" || state.demo ? "disabled" : ""}> Available</label><label class="check"><input type="checkbox" data-evidence="${esc(e.label)}" ${e.verified ? "checked" : ""} ${c.mode !== "advisor" || !e.reported || state.demo ? "disabled" : ""}> Verified</label></div></div>`).join("")}</div><p class="footer-note">The checklist measures evidence completeness, not financial health or readiness to sell. Advisor verification is a recorded review, not an automated document check.</p>`)}<div class="stack">${panel("Advisor review", c.mode === "advisor" ? `<form data-form="review" class="inline-form">${textarea("note", "Findings and recommended next steps", d.review?.note ?? "", "required")}<label class="check"><input type="checkbox" name="qualified" ${d.qualified ? "checked" : ""}><span>Qualify this opportunity for specialist discovery. I have reviewed the goals and verified at least two evidence categories.</span></label>${formEnd("Record advisor review")}</form>` : d.review ? `<p class="review-note">${esc(d.review.note)}</p><small>${date(d.review.at)} · ${esc(d.review.by)}</small>` : empty("Review pending", "Your assigned advisor records findings and qualification here."))}${panel("Keep professional judgment central", "<p>Formal valuations, buyer selection, financing, tax, legal matters, and final recommendations remain with qualified professionals. AI can help identify questions; it cannot approve this case.</p>")}</div></div>`;
 }
 function pathways(c) {
-  const suggested = suggestedPaths(c.data.profile);
-  return `${intro("Choose the outcome before the structure.", "Explore seven transition paths against liquidity, control, people, timing, and your future role. These are discussion prompts, not suitability recommendations.")}<div class="callout"><p>Highlighted paths follow simple rules based on your stated trigger, role, people priorities, and timeline. Every path remains available for advisor discussion; no fit score or buyer interest is inferred.</p></div><div class="path-grid">${paths.map((p) => `<article class="path-card ${suggested.includes(p.name) ? "suggested" : ""}">${badge(suggested.includes(p.name) ? "Discuss based on your goals" : "Alternative to explore", suggested.includes(p.name) ? "" : "gray")}<h2>${p.name}</h2><p>${p.people}</p><dl class="definition"><dt>Liquidity</dt><dd>${p.liquidity}</dd><dt>Control</dt><dd>${p.control}</dd><dt>Future role</dt><dd>${p.role}</dd><dt>Timing</dt><dd>${p.timing}</dd><dt>Certainty</dt><dd>${p.certainty}</dd><dt>Potential team</dt><dd>${p.team}</dd></dl></article>`).join("")}</div><p class="footer-note">Confidentiality and disclosure requirements apply to every path. Buyer selection and outreach require professional review and owner permission. ESOP feasibility requires specialist and fiduciary advice.</p>`;
+  const d = c.data,
+    suggested = suggestedPaths(d.profile),
+    decision = d.pathDecision;
+  return `${intro("Choose the outcome before the structure.", "Explore seven transition paths against liquidity, control, people, timing, and your future role. These are discussion prompts, not suitability recommendations.")}<div class="callout"><p>Highlighted paths follow simple rules based on your recorded goals. Every path remains available for advisor discussion; no fit score or buyer interest is inferred.</p></div><div class="two-col section-gap">${panel("Your working direction", c.mode === "owner" ? `<form data-form="pathDecision" class="inline-form"><div class="field"><label for="field-path">Path to discuss</label><select name="path" id="field-path"><option value="">Keep my options open</option>${paths.map((p) => `<option ${decision?.path === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>${textarea("reason", "Why this direction and what remains uncertain", decision?.reason ?? "", 'maxlength="2000"')}${formEnd("Save working direction")}</form>` : `<h3>${esc(decision?.path || "Options remain open")}</h3><p>${esc(decision?.reason || "The owner has not recorded a preferred direction.")}</p>`, "An owner preference, subject to advisor and specialist review.")}${panel("Prepare the decision conversation", `<p>Your priorities: ${esc((d.profile.decisionPriorities ?? []).join(", ") || "Not ranked yet")}. Your desired role: ${esc(d.profile.futureRole)}.</p>${contextAssistant("Compare the transition paths against my recorded decision priorities, successor readiness and preferred role. Explain tradeoffs and unanswered questions, without recommending a transaction.", "Compare my options with AI")}<p class="footer-note">Saving or changing a direction clears the case review and withdraws existing referrals for renewed owner approval.</p>`)}</div><div class="path-grid section-gap">${paths
+    .map((p) => {
+      const reasons = pathReasons(d.profile, p.name);
+      return `<article class="path-card ${suggested.includes(p.name) ? "suggested" : ""}">${badge(decision?.path === p.name ? "Your working direction" : suggested.includes(p.name) ? "Discuss based on your goals" : "Alternative to explore", suggested.includes(p.name) ? "" : "gray")}<h2>${p.name}</h2><p>${p.people}</p>${reasons.length ? `<p class="path-reason"><strong>Why discuss it</strong><br>${esc(reasons.join(" "))}</p>` : ""}<dl class="definition"><dt>Liquidity</dt><dd>${p.liquidity}</dd><dt>Control</dt><dd>${p.control}</dd><dt>Future role</dt><dd>${p.role}</dd><dt>Timing</dt><dd>${p.timing}</dd><dt>Certainty</dt><dd>${p.certainty}</dd><dt>Potential team</dt><dd>${p.team}</dd></dl></article>`;
+    })
+    .join(
+      "",
+    )}</div><p class="footer-note">Confidentiality and disclosure requirements apply to every path. Buyer selection and outreach require professional review and owner permission. ESOP feasibility requires specialist and fiduciary advice.</p>`;
+}
+function familyPage(c) {
+  const d = c.data,
+    plan = { ...defaultFamilyPlan, ...d.familyPlan },
+    b = familyBalance(plan),
+    editable = c.mode === "owner",
+    people = d.stakeholders ?? [];
+  return `${intro("Plan for the people behind the business.", "Separate operating roles, ownership expectations and family liquidity. A fair outcome starts with a conversation, not an automatic allocation.", "Family & legacy")}<div class="stats family-stats">${stat("Successor readiness", d.profile.successor ?? "Not discussed", "Owner-reported", true)}${stat("Family alignment", d.profile.familyReadiness ?? "Not discussed", "A discussion status, not a diagnosis")}${stat("Estate review", d.profile.estateStatus ?? "Not reviewed", "Update in Discovery")}${stat("Relationships mapped", people.length, "No access or outreach is granted")}</div><section class="panel"><div class="panel-head"><div><h2>Your family and trusted advisors</h2><p>Map who may be part of the next chapter. Listing a person does not invite them, share their information with specialists, or give anyone account access.</p></div>${contextAssistant("Help me prepare a family meeting agenda. Distinguish operating roles, ownership expectations, fairness and who is ready to participate.", "Prepare a family conversation")}</div><div class="relationship-map"><div class="relationship-center"><span class="avatar">${esc(
+    d.profile.name
+      ?.split(" ")
+      .map((x) => x[0])
+      .slice(0, 2)
+      .join(""),
+  )}</span><div><b>${esc(d.profile.name)}</b><small>Business owner · ${esc(d.profile.business)}</small></div></div><div class="relationship-grid">${people.map((person) => `<article class="relationship-card"><div class="row between"><h3>${esc(person.name)}</h3>${editable ? button("Edit", "editStakeholder", "quiet small", `data-id="${esc(person.id)}" ${locked()}`) : ""}</div><small>${esc(person.relationship)}</small><p>${esc(person.role)}</p>${badge(person.engagement, person.engagement === "Not discussed" ? "gray" : "")}<p class="relationship-notes">${esc(person.notes)}</p>${editable ? button("Remove", "removeStakeholder", "quiet small", `data-id="${esc(person.id)}" ${locked()}`) : ""}</article>`).join("") || empty("Who should be part of the conversation?", "Start with successors, family members outside the business and trusted advisors. Record willingness rather than assuming participation.")}</div></div>${editable ? `<details class="relationship-add"><summary>Add a relationship</summary><form data-form="stakeholder" class="inline-form" id="stakeholder-form"><input type="hidden" name="id" value=""><div class="form-grid">${input("name", "Person’s name", "", "text", 'required maxlength="200"')}${input("relationship", "Relationship to owner", "", "text", 'required maxlength="200"')}${select("role", "Business participation", stakeholderRoles, stakeholderRoles[0])}${select("engagement", "Discussion preference", stakeholderEngagementOptions, stakeholderEngagementOptions[0])}${textarea("notes", "Relationship context and open questions", "", 'maxlength="1500"').replaceAll("field-notes", "stakeholder-notes")}</div><p class="footer-note">This records the owner’s understanding. It is not verified consent from this person or permission for a bank to contact them.</p>${formEnd("Save relationship")}</form></details>` : ""}</section><div class="two-col section-gap"><section class="panel"><div class="eyebrow">An illustration to discuss</div><h2>Business ownership and family liquidity</h2><p>Explore equal-value shares as one conversation starter. These figures are independent of your sale proceeds scenario. Use the value of <strong>your business interest</strong>, not the full company value unless you own it all.</p><form data-form="familyPlan"><fieldset ${!editable || state.demo ? "disabled" : ""}><div class="form-grid">${input("businessValue", "Your business interest value ($)", plan.businessValue, "number", 'required min="0" max="1000000000000" step="1"')}${input("nonBusinessAssets", "Other personal assets ($)", plan.nonBusinessAssets, "number", 'required min="0" max="1000000000000" step="1"')}${input("liabilities", "Personal liabilities ($)", plan.liabilities, "number", 'required min="0" max="1000000000000" step="1"')}${input("availableLiquidity", "Liquid portion of other assets ($)", plan.availableLiquidity, "number", 'required min="0" max="1000000000000" step="1"', "Included in other personal assets above; not additional assets.")}${input("beneficiaries", "Number of beneficiaries", plan.beneficiaries, "number", 'required min="1" max="100" step="1"')}${input("businessRecipients", "Beneficiaries receiving the business interest", plan.businessRecipients, "number", 'required min="1" max="100" step="1"')}${input("insuranceBenefit", "Hypothetical future insurance death benefit ($)", plan.insuranceBenefit, "number", 'required min="0" max="1000000000000" step="1"', "A separate future illustration. Not current cash, a quote or recommended coverage.")}${textarea("notes", "Family plan assumptions and questions", plan.notes)}</div></fieldset>${editable ? formEnd("Save family assumptions") : ""}</form><p class="footer-note">Changing family assumptions or relationship entries clears the case review and withdraws existing referrals for renewed approval.</p></section><div class="stack">${panel(
+    "An equal-value illustration",
+    d.familyPlan
+      ? `<div class="money-rows">${[
+          ["Net assets in this illustration", b.netEstate],
+          ["Equal-value share per beneficiary", b.equalShare],
+          [
+            "Target for beneficiaries outside the business",
+            b.nonBusinessTarget,
+          ],
+          ["Other assets after liabilities", b.nonBusinessAvailable],
+          ["Asset gap against that target", b.equalizationGap],
+          ["Current liquid resources after liabilities", b.liquidAvailable],
+          ["Current liquidity gap", b.liquidityGap],
+        ]
+          .map(
+            ([label, v]) =>
+              `<div class="money-row"><span>${label}</span><strong>${money(v)}</strong></div>`,
+          )
+          .join(
+            "",
+          )}</div>${plan.insuranceBenefit > 0 ? `<div class="callout"><p>If the hypothetical death benefit were available at a future death, the gap against the <em>unchanged current target</em> would be ${money(b.illustrativeBenefitGap)}. This excludes premiums, underwriting, policy terms, estate treatment, timing and any change to the target itself.</p></div>` : ""}<p class="footer-note">Personal liabilities are conservatively deducted from non-business assets and liquidity. No estate taxes or costs are modeled. If liabilities exceed total assets, this illustration floors net assets at zero; seek professional review.</p>`
+      : empty(
+          "Start with your own assumptions",
+          "Save the owner's stake value and other assets to see the illustration. Missing information is not a zero-value assessment.",
+        ),
+  )}${panel("Advisor review of family assumptions", c.mode === "advisor" ? `<form data-form="familyReview" class="inline-form">${textarea("note", "Family review findings and professional questions", d.familyReview?.note ?? "", 'required maxlength="3000"')}${formEnd("Record family review")}</form>` : d.familyReview ? `<p class="review-note">${esc(d.familyReview.note)}</p><small>Recorded ${date(d.familyReview.at)}</small>` : empty("Review pending", "Your advisor can document assumptions, control questions and estate-specialist conversations."))}${panel("Fairness needs a human conversation", '<p>Equal shares are only one option. Consider control, work, risk, family expectations and the owner’s own needs. Discuss estate planning and any insurance with qualified professionals.</p><a class="text-link" href="https://www.pnc.com/insights/wealth-management/business-continuity-and-succession-planning/estate-equalization-through-life-insurance.html" target="_blank" rel="noopener noreferrer">PNC: estate equalization and family continuity ↗</a>')}</div></div>`;
+}
+function valuationPanel(c) {
+  const v = c.data.valuationReview;
+  return panel(
+    "Advisor’s preliminary value perspective",
+    `${v ? `<p class="value-range">${money(v.low)} – ${money(v.high)}</p><p>${esc(v.basis)}</p><small>Recorded ${date(v.at)}. A discussion perspective, not a certified appraisal.</small>` : empty("No preliminary range recorded", "The working multiple above is hypothetical. Your advisor can record a range with a dated source, basis and limitations.")}${c.mode === "advisor" ? `<form data-form="valuationReview" class="inline-form section-gap"><div class="form-grid">${input("low", "Lower enterprise value ($)", v?.low ?? "", "number", 'required min="0" max="1000000000000" step="1"')}${input("high", "Upper enterprise value ($)", v?.high ?? "", "number", 'required min="0" max="1000000000000" step="1"')}${textarea("basis", "Valuation basis, source date and limitations", v?.basis ?? "", 'required maxlength="3000"')}</div>${formEnd("Record preliminary value perspective")}</form>` : ""}<p class="footer-note">No licensed comparable data or live market feed is connected. Recording a range does not verify its underlying evidence. Discovery and scenario changes clear it for review.</p>`,
+  );
 }
 function proceedsPage(c) {
   const d = c.data,
@@ -355,18 +677,29 @@ function proceedsPage(c) {
       .join(
         "",
       )}<div class="money-row total ${r.cash < 0 ? "negative" : ""}"><span>${r.cash < 0 ? "Cash shortfall" : "Available cash"}</span><strong>${money(r.cash)}</strong></div></div>${r.shortfall || r.debtShortfall ? `<div class="callout amber"><p>${r.debtShortfall ? `Enterprise value does not cover debt and fees: ${money(r.debtShortfall)} shortfall. ` : ""}${r.shortfall ? `Family distributions exceed modeled cash by ${money(r.shortfall)}. Revisit assumptions before planning distributions.` : ""}</p></div>` : ""}<p class="footer-note">Your stated liquidity goal: ${money(p.liquidity)}. ${r.cash >= p.liquidity ? "The hypothetical cash meets this goal." : "The hypothetical cash falls below this goal."} Rollover equity is not available cash; its future value is uncertain.</p>`,
-  )}${panel("Connect proceeds to life after closing", '<p>Record spending needs, estate reviews, family distributions, and investment-policy conversations as named actions. A Private Bank referral requires separate approval of personal information sharing.</p><a class="btn secondary small" href="#/plan">Open wealth-planning actions</a>')}</div></div><section class="panel compare-panel"><h2>Compare your own assumptions</h2><p>These are sensitivity cases, not estimates for different buyer types. Ownership, fees, tax, distributions, and debt stay constant.</p><div class="table-wrap"><table><thead><tr><th>Hypothetical multiple</th><th>Enterprise value</th><th>Available cash / shortfall</th></tr></thead><tbody>${[
-    -1, 0, 1,
-  ]
-    .map((delta) => {
-      const multiple = Math.max(1, Math.min(15, s.multiple + delta)),
-        v = proceeds(p, { ...s, multiple });
-      return `<tr><td>${multiple.toFixed(1)}×${delta === 0 ? " · working" : ""}</td><td>${money(v.ev)}</td><td>${money(v.cash)}</td></tr>`;
-    })
-    .join("")}</tbody></table></div></section>`;
+  )}${panel("Connect proceeds to life after closing", '<p>Record spending needs, estate reviews, family distributions, and investment-policy conversations as named actions. A Private Bank referral requires separate approval of personal information sharing.</p><a class="btn secondary small" href="#/plan">Open wealth-planning actions</a>')}</div></div><section class="panel compare-panel"><h2>Compare your own assumptions</h2><p>These are sensitivity cases, not estimates for different buyer types. Ownership, fees, tax, distributions, and debt stay constant.</p><div class="table-wrap"><table><thead><tr><th>Hypothetical multiple</th><th>Enterprise value</th><th>Available cash / shortfall</th></tr></thead><tbody>${valuationSensitivity(
+    p,
+    s,
+  )
+    .map(
+      (v) =>
+        `<tr><td>${v.multiple.toFixed(1)}× · ${esc(v.label)}</td><td>${money(v.ev)}</td><td>${money(v.cash)}</td></tr>`,
+    )
+    .join("")}</tbody></table></div></section>${valuationPanel(c)}`;
 }
 function referrals(c) {
   const d = c.data;
+  const routes =
+    c.mode === "specialist"
+      ? ""
+      : `<section class="panel routing-panel section-gap"><h2>Teams to discuss with your advisor</h2><p>These prompts use your stated goals and working direction. They do not create referrals or confirm eligibility.</p><div class="routing-grid">${routingSuggestions(
+          d,
+        )
+          .map(
+            (r) =>
+              `<article><h3>${esc(r.team)}</h3><p>${esc(r.reason)}</p><small>Suggested discussion scope: ${esc(r.scope)}</small></article>`,
+          )
+          .join("")}</div></section>`;
   return `${c.mode !== "specialist" ? intro("The right team, with your permission.", "An advisor proposes the purpose and recipient. The owner approves the scope. The named specialist acknowledges the handoff.") : ""}<div class="two-col">${panel(c.mode === "specialist" ? "Referrals addressed to you" : "Specialist handoffs", d.referrals.length ? d.referrals.map((r) => `<article class="referral"><div class="row between"><h3>${esc(r.team)}</h3>${badge(r.status, ["Draft", "Queued"].includes(r.status) ? "amber" : "")}</div><small>Recipient: ${esc(r.recipient)}<br>Information scope: ${esc(r.scope)}</small><p>${esc(r.purpose)}</p><small>Proposed ${date(r.createdAt)}${r.queuedAt ? `<br>Owner approved ${date(r.approvedAt)}` : ""}${r.acceptedAt ? `<br>Recipient accepted ${date(r.acceptedAt)}` : ""}${r.completedAt ? `<br>Completed ${date(r.completedAt)}` : ""}</small><div class="row">${c.mode === "owner" && r.status === "Draft" ? button("Approve & queue referral", "referralStatus", "", `data-id="${r.id}" data-status="Queued" ${locked()}`) : ""}${c.mode === "owner" && ["Draft", "Queued", "Accepted", "Completed"].includes(r.status) ? button("Withdraw access", "referralStatus", "danger small", `data-id="${r.id}" data-status="Withdrawn" ${locked()}`) : ""}${c.mode === "specialist" && r.status === "Queued" ? button("Accept handoff", "referralStatus", "", `data-id="${r.id}" data-status="Accepted" ${locked()}`) + button("Decline", "referralStatus", "secondary", `data-id="${r.id}" data-status="Declined" ${locked()}`) : ""}${c.mode === "specialist" && r.status === "Accepted" ? button("Mark completed", "referralStatus", "", `data-id="${r.id}" data-status="Completed" ${locked()}`) : ""}</div></article>`).join("") : empty("No specialist referrals yet", "A reviewed case can be routed to the appropriate team. Approval creates an in-app handoff; no email is sent."))}<div class="stack">${
     c.mode === "advisor"
       ? panel(
@@ -387,14 +720,29 @@ function referrals(c) {
             "What you approve",
             "<p><strong>Business only</strong> shares business name, industry, transition trigger, timeline, revenue, EBITDA, debt, current ownership, desired role, and confidentiality requirements.</p><p><strong>Business + personal</strong> also shares the discovery profile’s owner identity, family and employee priorities, liquidity goals, desired retained ownership, notes, engagement preference, and assigned advisor email.</p><p>Specialists see the purpose and scope of their own approved referrals. They do not see your scenario editor, shared plan, case history, or AI conversation.</p>",
           )
-  }${panel("Permission stays with the owner", "<p>Withdraw a referral to stop further access, including after completion. Updating discovery or scenario assumptions withdraws existing referrals automatically. Information previously viewed cannot be recalled. Recipients see a snapshot of the profile approved at handoff; they do not receive later profile edits.</p><p>Handoffs are tracked in the application. They do not guarantee engagement, financing, buyer interest, or a professional recommendation.</p>")}</div></div>`;
+  }${panel("Permission stays with the owner", "<p>Withdraw a referral to stop further access, including after completion. Updating discovery or scenario assumptions withdraws existing referrals automatically. Information previously viewed cannot be recalled. Recipients see a snapshot of the profile approved at handoff; they do not receive later profile edits.</p><p>Handoffs are tracked in the application. They do not guarantee engagement, financing, buyer interest, or a professional recommendation.</p>")}</div></div>${routes}`;
 }
 function plan(c) {
   const d = c.data;
-  return `${intro("Every next step has an owner.", "Keep transition work, family continuity, and post-sale wealth planning in one shared action plan.")}<div class="two-col">${panel("Shared action plan", d.actions.map((a) => `<article class="action"><div><div class="eyebrow">${esc(a.kind)}</div><h3>${esc(a.title)}</h3><small>${esc(a.assignee)}${a.due ? ` · Due ${esc(a.due)}` : ""}</small></div><label class="field"><span class="muted">Status</span><select data-task="${a.id}" ${state.demo || (c.mode !== "advisor" && a.assignee !== "Owner") ? "disabled" : ""}>${["Open", "In progress", "Completed"].map((x) => `<option ${x === a.status ? "selected" : ""}>${x}</option>`).join("")}</select></label></article>`).join(""))}<div class="stack">${c.mode === "advisor" ? panel("Assign a next step", `<form data-form="addAction" class="inline-form">${input("title", "Action", "", "text", 'required maxlength="500"')}${input("assignee", "Responsible person / team", "", "text", 'required maxlength="200"')}${input("due", "Due date (optional)", "", "date")}${formEnd("Add shared action")}</form>`) : panel("Life beyond the transaction", "<p>Ask your advisor to assign specific actions for income needs, investment policy, estate documents, taxes, and family distributions. Mark your own family-continuity action as work progresses.</p>")}${c.mode === "advisor" ? panel("Observed outcomes", `<p>Record actual results only. Blank values remain unknown. These records support measurement; they do not establish that NEXUS caused the outcome.</p><form data-form="outcomes" class="inline-form">${input("workMinutes", "Advisor minutes recorded (cumulative)", d.workMinutes, "number", 'required min="0" max="100000" step="1"')}<label class="check"><input type="checkbox" name="closed" ${d.outcomes.closed ? "checked" : ""}><span>Transaction has closed</span></label>${input("assetsCaptured", "Post-sale assets captured ($; optional)", d.outcomes.assetsCaptured ?? "", "number", 'min="0" max="1000000000000" step="1"')}${select("retained", "Client relationship retained?", ["Not recorded", "Yes", "No"], d.outcomes.retained === null ? "Not recorded" : d.outcomes.retained ? "Yes" : "No")}${formEnd("Save observed outcomes")}</form>`) : ""}</div></div>`;
+  return `${intro("Every next step has an owner.", "Keep transition work, family continuity, and post-sale wealth planning in one shared action plan.")}<div class="two-col">${panel("Shared action plan", d.actions.map((a) => `<article class="action"><div><div class="eyebrow">${esc(a.kind)}</div><h3>${esc(a.title)}</h3><small>${esc(a.assignee)}${a.due ? ` · Due ${esc(a.due)}` : ""}</small></div><label class="field"><span class="muted">Status</span><select data-task="${a.id}" ${state.demo || (c.mode !== "advisor" && a.assignee !== "Owner") ? "disabled" : ""}>${["Open", "In progress", "Completed"].map((x) => `<option ${x === a.status ? "selected" : ""}>${x}</option>`).join("")}</select></label></article>`).join(""))}<div class="stack">${c.mode === "advisor" ? panel("Assign a next step", `<form data-form="addAction" class="inline-form">${input("title", "Action", "", "text", 'required maxlength="500"')}${input("assignee", "Responsible person / team", "", "text", 'required maxlength="200"')}${input("due", "Due date (optional)", "", "date")}${formEnd("Add shared action")}</form>`) : panel("Life beyond the transaction", "<p>Ask your advisor to assign specific actions for income needs, investment policy, estate documents, taxes, and family distributions. Mark your own family-continuity action as work progresses.</p>")}${c.mode === "advisor" ? panel("Observed outcomes", `<p>Record actual results only. Blank values remain unknown. These records support measurement; they do not establish that PNC Link caused the outcome.</p><form data-form="outcomes" class="inline-form">${input("workMinutes", "Advisor minutes recorded (cumulative)", d.workMinutes, "number", 'required min="0" max="100000" step="1"')}<label class="check"><input type="checkbox" name="closed" ${d.outcomes.closed ? "checked" : ""}><span>Transaction has closed</span></label>${input("assetsCaptured", "Post-sale assets captured ($; optional)", d.outcomes.assetsCaptured ?? "", "number", 'min="0" max="1000000000000" step="1"')}${select("retained", "Client relationship retained?", ["Not recorded", "Yes", "No"], d.outcomes.retained === null ? "Not recorded" : d.outcomes.retained ? "Yes" : "No")}${formEnd("Save observed outcomes")}</form>`) : ""}</div></div>`;
 }
 function assistant(c) {
-  return `${intro(c.mode === "advisor" ? "A second set of eyes for your case." : "Support for your next conversation.", "Ask for explanations, missing-information checks, transition comparisons, or help preparing an agenda. AI suggestions stay separate from the shared plan until a person records an action.")}<div class="chat-layout"><section class="panel"><div class="chat-thread" id="thread">${state.chat.length ? state.chat.map((m) => `<div class="chat-message question"><b>You</b>${esc(m.question)}</div><div class="chat-message"><b>NEXUS AI · suggestion</b>${esc(m.answer)}</div>`).join("") : empty("Start with your most important question.", "For example: What information should I gather before discussing a family transfer?")}</div>${state.demo ? '<div class="callout amber"><p>The sample does not run AI or save conversations. Sign in and create a case to use assistance grounded in your own profile.</p></div>' : `<form data-form="assist" class="inline-form"><label class="field"><span>Your question</span><textarea name="question" id="question" required maxlength="2000" placeholder="Help me prepare for my next advisor meeting…"></textarea></label><label class="check"><input type="checkbox" name="consent" required><span>I agree to share this case’s discovery answers, readiness summary, scenario, advisor findings, actions, and referral purposes with the AI service for this request. Direct name and email fields are omitted; free-text notes may still identify me. My questions and answers are saved privately to my account.</span></label>${formEnd("Ask NEXUS AI")}</form>`}</section><aside class="chat-aside"><div class="eyebrow">Conversation starters</div>${["Summarize the missing information and my next three questions.", "Compare family transfer, ESOP, and management transfer against my priorities.", "Explain my proceeds assumptions and what a tax advisor should review.", "Draft an agenda for a wealth-planning conversation."].map((x) => `<button class="prompt-button" data-prompt="${esc(x)}">${esc(x)} <span aria-hidden="true">↗</span></button>`).join("")}<p class="footer-note">AI can be wrong. It has no live market research or document access and cannot send referrals, approve financing, certify value, or provide tax, legal, or investment advice. Review suggestions with your advisor. Limit: 20 requests per account per hour.</p></aside></div>`;
+  const advisor = c.mode === "advisor",
+    d = c.data;
+  const prompts = advisor
+    ? [
+        "Prepare a client meeting brief: trigger, goals, preferred path, family dynamics, evidence gaps and three next actions. Separate facts from unanswered questions.",
+        "Which specialist conversations are worth reviewing and why? State the appropriate information scope and permission steps.",
+        "Identify gaps between the owner's business transition and personal wealth plan. Suggest shared actions for my review.",
+        "Review the recorded family relationships and discussion preferences. What should I confirm before involving the next generation?",
+      ]
+    : [
+        "Summarize the missing information and my next three questions.",
+        "Compare transition options against my priorities, successor readiness and desired future role.",
+        "Help me understand the family liquidity illustration and questions to ask an estate specialist.",
+        "Explain my proceeds assumptions and what a tax and wealth advisor should review.",
+      ];
+  return `${intro(advisor ? "A second set of eyes for your case." : "Support for your next conversation.", advisor ? "Prepare a focused conversation and proposed actions using this client’s recorded context. Your judgment stays central." : "Understand your options, find missing information and prepare questions for your advisor. You choose what happens next.")}<div class="assistant-context"><span class="ai-symbol" aria-hidden="true">✧</span><div><strong>Working with ${esc(d.profile.business)}</strong><small>${esc(d.profile.trigger)} · ${esc(d.pathDecision?.path || "Options open")} · ${readiness(d).verified}/${readiness(d).total} evidence categories verified</small></div>${badge("Private to your account", "gray")}</div><div class="chat-layout"><section class="panel"><div class="chat-thread" id="thread" role="log" aria-label="Private AI conversation" aria-live="polite">${state.chat.length ? state.chat.map((m) => `<div class="chat-message question"><b>You</b>${esc(m.question)}</div><div class="chat-message"><b>PNC Link AI · suggestion</b>${esc(m.answer)}</div>`).join("") : empty(advisor ? "Prepare for the next client conversation." : "Start with your most important question.", "Choose a conversation starter or ask a question grounded in this case.")}</div>${state.demo ? `<div class="callout amber"><p>The sample does not run AI or save conversations. Sign in and create a case to use assistance grounded in your own profile.</p>${state.assistantDraft ? `<p><strong>Prepared question</strong><br>${esc(state.assistantDraft)}</p>` : ""}</div>` : `<form data-form="assist" class="inline-form"><div class="field"><label for="question">Your question</label><textarea name="question" id="question" required maxlength="2000" placeholder="What would you like to understand or prepare?">${esc(state.assistantDraft)}</textarea></div><label class="check"><input type="checkbox" name="consent" required><span>I agree to share this case’s discovery answers, evidence summary, proceeds scenario, family plan, stakeholder roles and notes, preferred path, recorded value perspective, advisor findings, actions and referral purposes${advisor ? ", including my internal relationship notes" : ""} with the AI service for this request. Direct name and email fields are omitted; free text may identify people. My question, response and up to four prior private turns are used for context. Conversations are saved privately to my account.</span></label>${formEnd("Ask PNC Link AI")}</form>`}</section><aside class="chat-aside"><div class="eyebrow">${advisor ? "Advisor preparation" : "Conversation starters"}</div>${prompts.map((x) => `<button class="prompt-button" data-prompt="${esc(x)}">${esc(x)} <span aria-hidden="true">↗</span></button>`).join("")}<div class="assistant-evidence"><h3>Grounded in your case</h3><ul class="info-list"><li>Owner-reported business and family priorities</li><li>Verified evidence counts and advisor findings</li><li>Saved assumptions and open next steps</li><li>Selected published PNC resources</li></ul><a href="#/resources">Review the source resources →</a></div><p class="footer-note">AI can be wrong. It has no live market data or document access and cannot change your case, send referrals, certify value or give tax, legal, insurance or investment recommendations. Review suggestions with your advisor. Limit: 20 requests per account per hour.</p></aside></div>`;
 }
 function historyPage() {
   return `${intro("A visible record of progress.", "Case changes and handoff milestones are recorded automatically. AI conversations remain private to the person who asked.")}<section class="panel"><ul class="timeline">${state.history.map((e) => `<li>${esc(e.label)}<small>${date(e.createdAt)}</small></li>`).join("") || "<li>No changes recorded yet.</li>"}</ul></section>`;
@@ -402,6 +750,51 @@ function historyPage() {
 function metricsPage() {
   const m = state.metrics;
   return `${intro("Measure the journey, then test the impact.", "These observations cover cases assigned to you. Faster engagement, higher capacity, asset capture, and retention remain hypotheses until validated against a baseline.")}<div class="stats">${stat("Shared cases", m.cases ?? 0, "Assigned to your account", true)}${stat("Qualified opportunities", m.qualified ?? 0, "Reviewed + ≥2 categories verified")}${stat("Referral acceptance", m.acceptance === null ? "Not yet" : `${m.acceptance}%`, `${m.accepted ?? 0} accepted / ${m.sent ?? 0} ever queued`)}${stat("Time to acceptance", m.hours === null ? "Not yet" : `${m.hours} hrs`, "Mean: owner approval → acceptance")}${stat("Recorded advisor effort", `${m.workMinutes ?? 0} min`, "Cumulative observed time; not savings")}${stat("Post-sale assets captured", money(m.assets), `${m.outcomeCount ?? 0} recorded outcomes`)}${stat("Client retention", m.retention === null ? "Not recorded" : `${m.retention}%`, "Among closed cases with known status")}${stat("Closed transactions", m.closed ?? 0, "Advisor-reported outcomes")}</div><div class="callout"><p>Unknown outcomes are excluded from assets and retention calculations. Queued referrals later withdrawn remain in the referral denominator. These are workflow observations, not audited PNC performance or evidence of causal uplift.</p></div>${panel("Validation conversations", '<ul class="info-list"><li>What uncertainty has delayed the owner’s next decision?</li><li>Whom do they trust first, and where does coordination break down?</li><li>Which outcomes matter beyond price?</li><li>What would they share with AI, and when would outreach feel intrusive?</li><li>When do they choose who manages post-sale proceeds?</li></ul><p class="footer-note">Capture interview findings as advisor review notes and distinguish direct experience from stated preference and inference.</p>')}`;
+}
+function downloadBrief(c) {
+  if (!c || c.mode === "specialist") return;
+  const d = c.data,
+    p = d.profile;
+  const lines = [
+    "PNC Link | Meeting preparation brief",
+    p.business,
+    `Owner: ${p.name}`,
+    `Prepared: ${today()}`,
+    "",
+    `Trigger: ${p.trigger} | Horizon: ${p.timeline} years | Desired role: ${p.futureRole}`,
+    `Priorities: ${(p.decisionPriorities ?? []).join(", ") || "Not recorded"}`,
+    `Family: ${p.priorities || "Not recorded"}`,
+    `Employees: ${p.employeePriorities || "Not recorded"}`,
+    `Successor: ${p.successor || "Not discussed"}`,
+    `Discussion preference: ${p.outreach}`,
+    "",
+    `Working direction: ${d.pathDecision?.path || "Options open"}`,
+    d.pathDecision?.reason || "",
+    `Evidence: ${readiness(d).reported} available / ${readiness(d).verified} verified / ${readiness(d).total} categories`,
+    "",
+    "ADVISOR REVIEW",
+    d.review?.note || "Pending",
+    "",
+    "NEXT STEPS",
+    ...nextSteps(d, c.mode).map((x) => `${x.title}: ${x.detail}`),
+    "",
+    "OPEN SHARED ACTIONS",
+    ...d.actions
+      .filter((x) => x.status !== "Completed")
+      .map((x) => `${x.title} | ${x.assignee} | ${x.due || "No due date"}`),
+    "",
+    "Planning support only. Owner-reported information and hypothetical financial assumptions require professional review. This brief is a local download; no messages or referrals are sent.",
+  ];
+  const blob = new Blob([lines.join("\n")], {
+      type: "text/plain;charset=utf-8",
+    }),
+    url = URL.createObjectURL(blob),
+    link = document.createElement("a");
+  link.href = url;
+  link.download = "pnc-link-meeting-brief.txt";
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  notice("Meeting brief downloaded. It contains private case information.");
 }
 function render() {
   renderVersion++;
@@ -411,20 +804,31 @@ function render() {
   if (r === "home") html = home();
   else if (["signin", "signup", "recover", "reset", "invite"].includes(r))
     html = authPage(r);
+  else if (r === "resources" && !state.user && !state.demo)
+    html = `${publicHeader()}<main id="main" class="main public-resources">${resources()}</main>`;
   else if (!state.user && !state.demo) {
     location.hash = "#/signin";
     return;
   } else {
     let body;
-    if (!c && r !== "discovery" && r !== "metrics") body = noCase();
+    if (["portfolio", "metrics"].includes(r) && !isAdvisor())
+      body = `${intro("Advisor workspace", "This page is available to invited advisors. Your owner case remains available in My transition.")}<a class="btn" href="#/overview">Open my transition</a>`;
+    else if (
+      !c &&
+      !["discovery", "metrics", "portfolio", "resources"].includes(r)
+    )
+      body = noCase();
     else if (c?.mode === "specialist" && !["overview", "referrals"].includes(r))
       body = overview(c);
     else {
       const pages = {
+        portfolio,
+        resources,
         overview: () => overview(c),
         discovery: () => discovery(c),
         readiness: () => readinessPage(c),
         pathways: () => pathways(c),
+        family: () => familyPage(c),
         proceeds: () => proceedsPage(c),
         referrals: () => referrals(c),
         plan: () => plan(c),
@@ -439,7 +843,12 @@ function render() {
     html = shell(body, r);
   }
   app.innerHTML = html;
-  document.title = `${r === "home" ? "Business transitions" : r.charAt(0).toUpperCase() + r.slice(1)} · PNC NEXUS`;
+  const renderedKey = `${state.demo}:${state.demoRole}:${r}:${state.selected}`;
+  if (renderedKey !== lastRenderedKey) {
+    window.scrollTo({ top: 0, behavior: "instant" });
+    lastRenderedKey = renderedKey;
+  }
+  document.title = `${r === "home" ? "Business transitions" : r.charAt(0).toUpperCase() + r.slice(1)} · PNC Link`;
   document.querySelector("h1")?.focus({ preventScroll: true });
   if (r === "assistant") $("#thread")?.scrollTo(0, $("#thread").scrollHeight);
 }
@@ -479,13 +888,14 @@ app.addEventListener("submit", async (e) => {
         state.callback = null;
         await loadCases();
         await loadHistory();
-        location.hash = "#/overview";
+        location.hash = isAdvisor() ? "#/portfolio" : "#/overview";
       } else if (result.message) {
         notice(result.message);
         if (err) err.textContent = result.message;
       }
     } else if (kind === "profile") {
       data.shareWithAdvisor = f.elements.shareWithAdvisor.checked;
+      data.decisionPriorities = new FormData(f).getAll("decisionPriorities");
       if (current()) await update("profile", data);
       else {
         if (state.demo) throw Error("The sample is read-only.");
@@ -517,6 +927,7 @@ app.addEventListener("submit", async (e) => {
         });
       if (current()?.id === id && route() === "assistant") {
         state.chat.push({ question: data.question, answer: result.answer });
+        state.assistantDraft = "";
         render();
       }
     } else await update(kind, data);
@@ -531,10 +942,22 @@ app.addEventListener("submit", async (e) => {
   }
 });
 app.addEventListener("click", async (e) => {
+  const ask = e.target.closest("[data-ask]");
+  if (ask) {
+    if (!current() || current().mode === "specialist") {
+      notice("Open an owner or assigned advisor case first.");
+      return;
+    }
+    state.assistantDraft = ask.dataset.ask;
+    if (route() === "assistant") render();
+    else location.hash = "#/assistant";
+    return;
+  }
   const prompt = e.target.closest("[data-prompt]");
   if (prompt) {
     if ($("#question")) {
       $("#question").value = prompt.dataset.prompt;
+      state.assistantDraft = prompt.dataset.prompt;
       $("#question").focus();
     } else notice("Sign in and create a case to use AI assistance.");
     return;
@@ -543,19 +966,60 @@ app.addEventListener("click", async (e) => {
   if (!b) return;
   const action = b.dataset.action;
   try {
-    if (action === "demo") {
+    if (action === "demo" || action === "demoAdvisor") {
       state.demo = true;
-      state.demoRole = "owner";
+      state.demoRole = action === "demoAdvisor" ? "advisor" : "owner";
       state.selected = "sample";
       await loadCases();
       await loadHistory();
-      location.hash = "#/overview";
+      location.hash =
+        state.demoRole === "advisor" ? "#/portfolio" : "#/overview";
       render();
     } else if (action === "demoSwitch") {
       state.demoRole = state.demoRole === "owner" ? "advisor" : "owner";
       await loadCases();
       await loadHistory();
       render();
+      location.hash =
+        state.demoRole === "advisor" ? "#/portfolio" : "#/overview";
+    } else if (action === "openCase" || action === "caseBrief") {
+      if (
+        !state.cases.some((c) => c.id === b.dataset.id && c.mode === "advisor")
+      )
+        throw Error("This client is unavailable.");
+      state.selected = b.dataset.id;
+      state.chat = [];
+      state.history = [];
+      state.assistantDraft = "";
+      render();
+      await loadHistory();
+      if (current()?.id !== b.dataset.id) return;
+      if (action === "caseBrief")
+        state.assistantDraft =
+          "Prepare an advisor meeting brief for this client: goals, family context, evidence gaps, transition alternatives and three proposed next actions. State what is known versus assumed.";
+      location.hash = action === "caseBrief" ? "#/assistant" : "#/overview";
+      render();
+    } else if (action === "removeStakeholder") {
+      await update("removeStakeholder", { id: b.dataset.id });
+    } else if (action === "editStakeholder") {
+      const person = current().data.stakeholders.find(
+          (p) => p.id === b.dataset.id,
+        ),
+        form = $("#stakeholder-form");
+      if (!person || !form || state.demo) return;
+      form.closest("details").open = true;
+      for (const key of [
+        "id",
+        "name",
+        "relationship",
+        "role",
+        "engagement",
+        "notes",
+      ])
+        form.elements[key].value = person[key] ?? "";
+      form.elements.name.focus();
+    } else if (action === "downloadBrief") {
+      downloadBrief(current());
     } else if (action === "logout") {
       await api("/api/auth", { action: "logout" });
       state.user = null;
@@ -586,11 +1050,35 @@ app.addEventListener("click", async (e) => {
     b.disabled = false;
   }
 });
+app.addEventListener("input", (e) => {
+  if (e.target.id === "question") state.assistantDraft = e.target.value;
+  if (e.target.id === "portfolio-search") {
+    state.portfolioSearch = e.target.value;
+    $("#portfolio-results").innerHTML = portfolioResults();
+  }
+});
 app.addEventListener("change", async (e) => {
   const el = e.target;
   try {
-    if (el.id === "caseSelect") {
+    if (
+      ["portfolio-stage", "portfolio-attention", "portfolio-sort"].includes(
+        el.id,
+      )
+    ) {
+      state[
+        {
+          "portfolio-stage": "portfolioStage",
+          "portfolio-attention": "portfolioAttention",
+          "portfolio-sort": "portfolioSort",
+        }[el.id]
+      ] = el.value;
+      $("#portfolio-results").innerHTML = portfolioResults();
+    } else if (el.id === "caseSelect") {
       state.selected = el.value;
+      state.chat = [];
+      state.history = [];
+      state.assistantDraft = "";
+      render();
       await loadHistory();
       render();
     } else if (el.dataset.evidence) {
@@ -609,7 +1097,11 @@ app.addEventListener("change", async (e) => {
     el.disabled = false;
   }
 });
-window.addEventListener("hashchange", () => {
+window.addEventListener("hashchange", async () => {
+  if (["sample-owner", "sample-advisor"].includes(route())) {
+    await openSample(route() === "sample-advisor" ? "advisor" : "owner");
+    return;
+  }
   if (["signin", "signup"].includes(route()) && state.demo) {
     state.demo = false;
     state.cases = [];
@@ -619,7 +1111,24 @@ window.addEventListener("hashchange", () => {
   }
   render();
 });
+async function openSample(role) {
+  state.demo = true;
+  state.demoRole = role;
+  state.selected = "sample";
+  await loadCases();
+  await loadHistory();
+  history.replaceState(
+    null,
+    "",
+    location.pathname + (role === "advisor" ? "#/portfolio" : "#/overview"),
+  );
+  render();
+}
 async function init() {
+  if (["sample-owner", "sample-advisor"].includes(route())) {
+    await openSample(route() === "sample-advisor" ? "advisor" : "owner");
+    return;
+  }
   try {
     const params = new URLSearchParams(location.hash.slice(1));
     if (params.has("confirmation_token")) {
@@ -644,10 +1153,23 @@ async function init() {
       await loadCases();
       await loadHistory();
       if (["home", "signin"].includes(route()))
-        history.replaceState(null, "", location.pathname + "#/overview");
+        history.replaceState(
+          null,
+          "",
+          location.pathname + (isAdvisor() ? "#/portfolio" : "#/overview"),
+        );
     }
     render();
   } catch (error) {
+    if (
+      !state.user &&
+      ["home", "resources", "signin", "signup", "recover"].includes(route()) &&
+      !/(?:confirmation|recovery|invite)_token=/.test(location.hash)
+    ) {
+      state.servicesAvailable = false;
+      render();
+      return;
+    }
     app.innerHTML = `${publicHeader()}<main class="error-page" id="main">${intro("Your workspace could not open.", "Please retry. Your case is saved on the server; this screen does not imply a lost record.")}<p class="form-error">${esc(error.message)}</p><a class="btn" href="/">Try again</a> ${button("View read-only sample", "demo", "secondary")}</main>`;
   }
 }

@@ -19,6 +19,11 @@ await page
     exact: true,
   })
   .waitFor();
+await page.screenshot({
+  path: "/tmp/pnc-link-owner.png",
+  fullPage: true,
+  animations: "disabled",
+});
 assert.equal(await page.locator('input[name="topic"]').count(), 1);
 assert.equal(
   await page
@@ -30,11 +35,13 @@ for (const [name, title] of [
   ["Discovery profile", "The full picture starts here."],
   ["Readiness & review", "Evidence before conclusions."],
   ["Transition options", "Choose the outcome before the structure."],
+  ["Family & legacy", "Plan for the people behind the business."],
   ["Proceeds & wealth", "From business value to personal choices."],
   ["Specialist referrals", "The right team, with your permission."],
   ["Shared action plan", "Every next step has an owner."],
   ["AI assistant", "Support for your next conversation."],
   ["Case history", "A visible record of progress."],
+  ["Planning resources", "A stronger plan starts with better questions."],
 ]) {
   await page.getByRole("link", { name, exact: true }).click();
   await page.getByRole("heading", { name: title, exact: true }).waitFor();
@@ -44,6 +51,18 @@ for (const [name, title] of [
 await page
   .getByRole("button", { name: "View as advisor", exact: true })
   .click();
+await page
+  .getByRole("heading", {
+    name: "A clearer view of every client.",
+    exact: true,
+  })
+  .waitFor();
+assert.equal(await page.locator("#portfolio-results tbody tr").count(), 4);
+await page.screenshot({
+  path: "/tmp/pnc-link-portfolio.png",
+  fullPage: true,
+  animations: "disabled",
+});
 await page
   .getByRole("link", { name: "Practice insights", exact: true })
   .click();
@@ -59,7 +78,11 @@ assert.equal(
     .isDisabled(),
   true,
 );
-await page.screenshot({ path: "/tmp/nexus-advisor.png", fullPage: true });
+await page.screenshot({
+  path: "/tmp/nexus-advisor.png",
+  fullPage: true,
+  animations: "disabled",
+});
 await page.setViewportSize({ width: 390, height: 844 });
 await page
   .getByRole("link", { name: "Transition options", exact: true })
@@ -73,7 +96,49 @@ assert.ok(
   ),
   "mobile page overflows",
 );
-await page.screenshot({ path: "/tmp/nexus-mobile.png", fullPage: true });
+await page.screenshot({
+  path: "/tmp/nexus-mobile.png",
+  fullPage: true,
+  animations: "disabled",
+});
+for (const [name, heading] of [
+  ["Client portfolio", "A clearer view of every client."],
+  ["Family & legacy", "Plan for the people behind the business."],
+  ["AI assistant", "A second set of eyes for your case."],
+  ["Planning resources", "A stronger plan starts with better questions."],
+]) {
+  await page.getByRole("link", { name, exact: true }).click();
+  await page.getByRole("heading", { name: heading, exact: true }).waitFor();
+  assert.ok(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+    `${name} overflows on mobile`,
+  );
+  const ids = await page
+    .locator("[id]")
+    .evaluateAll((elements) => elements.map((el) => el.id));
+  assert.equal(ids.length, new Set(ids).size, `${name} has duplicate IDs`);
+  if (name === "Family & legacy")
+    await page.screenshot({
+      path: "/tmp/pnc-link-family-mobile.png",
+      fullPage: true,
+      animations: "disabled",
+    });
+}
+await page.setViewportSize({ width: 1440, height: 1000 });
+await page.getByRole("link", { name: "Family & legacy", exact: true }).click();
+await page
+  .getByRole("heading", {
+    name: "Plan for the people behind the business.",
+    exact: true,
+  })
+  .waitFor();
+await page.screenshot({
+  path: "/tmp/pnc-link-family.png",
+  fullPage: true,
+  animations: "disabled",
+});
 await page.getByRole("link", { name: "Create your case", exact: true }).click();
 await page
   .getByRole("heading", { name: "Start your next chapter.", exact: true })
@@ -85,6 +150,6 @@ assert.equal(
 );
 assert.deepEqual(errors, []);
 console.log(
-  "PASS: home, both sample workspaces, all nine case screens, read-only actions, seven transition paths, mobile layout, and signup.",
+  "PASS: home, both sample workspaces, all owner case screens and resources, read-only actions, seven transition paths, mobile layout, and signup.",
 );
 await browser.close();

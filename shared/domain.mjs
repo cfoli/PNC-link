@@ -86,6 +86,81 @@ export const paths = [
     team: "Succession Planning",
   },
 ];
+export const successorOptions = [
+  "Not discussed",
+  "No successor identified",
+  "Family successor interested",
+  "Management successor interested",
+  "External sale preferred",
+];
+export const familyReadinessOptions = [
+  "Not discussed",
+  "Aligned",
+  "Needs discussion",
+  "Conflict identified",
+];
+export const estateStatusOptions = [
+  "Not reviewed",
+  "Review in progress",
+  "Reviewed with professional",
+];
+export const decisionPriorityOptions = [
+  "Liquidity",
+  "Family continuity",
+  "Employee continuity",
+  "Legacy",
+  "Speed",
+  "Retained control",
+];
+export const caseStages = [
+  "Discovery",
+  "Preparation",
+  "Specialist engagement",
+  "Transition execution",
+  "Post-transition",
+];
+export const stakeholderRoles = [
+  "Active in business",
+  "Outside business",
+  "Advisor",
+  "Undecided",
+];
+export const stakeholderEngagementOptions = [
+  "Not discussed",
+  "Owner will introduce",
+  "Permission to discuss",
+];
+export const defaultFamilyPlan = {
+  businessValue: 0,
+  nonBusinessAssets: 0,
+  liabilities: 0,
+  beneficiaries: 2,
+  businessRecipients: 1,
+  availableLiquidity: 0,
+  insuranceBenefit: 0,
+  notes: "",
+};
+export const defaultManagement = {
+  stage: "Discovery",
+  nextContact: "",
+  note: "",
+};
+function choice(value, options, fallback, label) {
+  if (value === undefined || value === null || value === "") return fallback;
+  if (!options.includes(value)) fail(`Choose a supported ${label}.`);
+  return value;
+}
+export function dateInput(value, label = "date") {
+  const v = text(value ?? "", 10);
+  if (
+    v &&
+    (!/^\d{4}-\d{2}-\d{2}$/.test(v) ||
+      !Number.isFinite(Date.parse(v + "T00:00:00Z")) ||
+      new Date(v + "T00:00:00Z").toISOString().slice(0, 10) !== v)
+  )
+    fail(`Choose a valid ${label}.`);
+  return v;
+}
 export const defaultScenario = {
   multiple: 5,
   fees: 4,
@@ -156,6 +231,31 @@ export function profileInput(p) {
   if (out.advisorEmail && p.shareWithAdvisor !== true)
     fail("Confirm permission to share the full case with your named advisor.");
   out.shareWithAdvisor = !!out.advisorEmail;
+  out.successor = choice(
+    p.successor,
+    successorOptions,
+    "Not discussed",
+    "successor status",
+  );
+  out.familyReadiness = choice(
+    p.familyReadiness,
+    familyReadinessOptions,
+    "Not discussed",
+    "family alignment",
+  );
+  out.estateStatus = choice(
+    p.estateStatus,
+    estateStatusOptions,
+    "Not reviewed",
+    "estate review status",
+  );
+  if (
+    p.decisionPriorities !== undefined &&
+    (!Array.isArray(p.decisionPriorities) ||
+      p.decisionPriorities.some((v) => !decisionPriorityOptions.includes(v)))
+  )
+    fail("Choose supported decision priorities.");
+  out.decisionPriorities = [...new Set(p.decisionPriorities ?? [])];
   return out;
 }
 export function scenarioInput(s) {
@@ -201,16 +301,370 @@ export function readiness(data) {
   };
 }
 export function suggestedPaths(p) {
-  const names = [];
-  if (p.trigger === "Family succession" || /family|legacy/i.test(p.priorities))
-    names.push("Family transfer");
-  if (p.futureRole === "Continue leading")
-    names.push("PE with rollover", "Partial recapitalization");
-  if (/employee|team/i.test(p.employeePriorities))
-    names.push("Management transfer", "ESOP");
-  if (p.futureRole === "Exit fully") names.push("Strategic sale");
-  if (p.timeline >= 3) names.push("Prepare / delayed exit");
-  return [...new Set(names)];
+  return paths
+    .filter((path) => pathReasons(p, path.name).length > 0)
+    .map((path) => path.name);
+}
+export function familyPlanInput(p) {
+  const out = {};
+  for (const k of [
+    "businessValue",
+    "nonBusinessAssets",
+    "liabilities",
+    "availableLiquidity",
+    "insuranceBenefit",
+  ])
+    out[k] = number(p[k], 0, 1e12, k.replace(/([A-Z])/g, " $1"));
+  out.beneficiaries = number(p.beneficiaries, 1, 100, "Beneficiaries");
+  out.businessRecipients = number(
+    p.businessRecipients,
+    1,
+    out.beneficiaries,
+    "Business recipients",
+  );
+  if (
+    !Number.isInteger(out.beneficiaries) ||
+    !Number.isInteger(out.businessRecipients)
+  )
+    fail("Beneficiary counts must be whole numbers.");
+  if (out.availableLiquidity > out.nonBusinessAssets)
+    fail(
+      "Available liquidity is the liquid portion of non-business assets and cannot exceed those assets.",
+    );
+  out.notes = text(p.notes ?? "", 3000);
+  return out;
+}
+export function familyBalance(plan) {
+  const p = { ...defaultFamilyPlan, ...plan };
+  const netEstate = Math.max(
+    0,
+    p.businessValue + p.nonBusinessAssets - p.liabilities,
+  );
+  const equalShare = netEstate / Math.max(1, p.beneficiaries);
+  const nonBusinessTarget =
+    equalShare * Math.max(0, p.beneficiaries - p.businessRecipients);
+  const nonBusinessAvailable = Math.max(0, p.nonBusinessAssets - p.liabilities);
+  const equalizationGap = Math.max(0, nonBusinessTarget - nonBusinessAvailable);
+  const liquidAvailable = Math.max(
+    0,
+    Math.min(p.availableLiquidity, p.nonBusinessAssets) - p.liabilities,
+  );
+  const liquidityGap = Math.max(0, nonBusinessTarget - liquidAvailable);
+  return {
+    netEstate,
+    equalShare,
+    nonBusinessTarget,
+    nonBusinessAvailable,
+    equalizationGap,
+    liquidAvailable,
+    liquidityGap,
+    illustrativeBenefitGap: Math.max(0, liquidityGap - p.insuranceBenefit),
+  };
+}
+export function valuationSensitivity(profile, scenario) {
+  const s = scenario ?? defaultScenario;
+  return [
+    { label: "Lower", multiple: Math.max(1, s.multiple - 1) },
+    { label: "Working", multiple: s.multiple },
+    { label: "Higher", multiple: Math.min(15, s.multiple + 1) },
+  ].map((v) => ({
+    ...v,
+    ...proceeds(profile, { ...s, multiple: v.multiple }),
+  }));
+}
+export function pathReasons(p, pathName) {
+  const priorities = p.decisionPriorities ?? [];
+  const reasons = [];
+  if (
+    pathName === "Strategic sale" &&
+    (p.futureRole === "Exit fully" || p.successor === "External sale preferred")
+  )
+    reasons.push(
+      "You want a full exit or have expressed a preference for an external sale.",
+    );
+  if (
+    ["PE with rollover", "Partial recapitalization"].includes(pathName) &&
+    (p.futureRole === "Continue leading" ||
+      p.retained > 0 ||
+      priorities.includes("Retained control"))
+  )
+    reasons.push(
+      "You want continuing involvement or retained ownership; partner governance and future liquidity need review.",
+    );
+  if (
+    pathName === "Family transfer" &&
+    (p.trigger === "Family succession" ||
+      p.successor === "Family successor interested" ||
+      priorities.includes("Family continuity") ||
+      /family|legacy/i.test(p.priorities ?? ""))
+  )
+    reasons.push(
+      "Family succession or continuity is among your stated goals; confirm successor willingness and capability.",
+    );
+  if (
+    ["Management transfer", "ESOP"].includes(pathName) &&
+    (p.successor === "Management successor interested" ||
+      priorities.includes("Employee continuity") ||
+      /employee|team/i.test(p.employeePriorities ?? ""))
+  )
+    reasons.push(
+      "Employee or management continuity matters to you; feasibility, financing and governance need specialist review.",
+    );
+  if (
+    pathName === "Prepare / delayed exit" &&
+    (p.timeline >= 3 || p.successor === "No successor identified")
+  )
+    reasons.push(
+      "Your preparation runway or successor gap creates a reason to improve readiness before committing to a structure.",
+    );
+  return reasons;
+}
+export function routingSuggestions(data) {
+  const p = data.profile ?? {},
+    selected = data.pathDecision?.path;
+  const out = [
+    {
+      team: "PNC Private Bank",
+      reason:
+        "Connect business liquidity with personal spending, estate and long-term wealth needs before a transition.",
+      scope: "Business + personal",
+    },
+  ];
+  if (
+    selected === "Strategic sale" ||
+    p.futureRole === "Exit fully" ||
+    p.successor === "External sale preferred"
+  )
+    out.push({
+      team: "Harris Williams",
+      reason:
+        "Discuss valuation perspectives and external sale alternatives; engagement and eligibility require advisor confirmation.",
+      scope: "Business only",
+    });
+  if (
+    selected === "PE with rollover" ||
+    (p.futureRole === "Continue leading" && p.retained > 0)
+  )
+    out.push({
+      team: "Financial Sponsor Coverage",
+      reason:
+        "Explore sponsor-related questions for continuing ownership; no buyer preference or financing approval is implied.",
+      scope: "Business only",
+    });
+  if (
+    ["Management transfer", "Partial recapitalization"].includes(selected) ||
+    p.successor === "Management successor interested"
+  )
+    out.push({
+      team: "Business Credit",
+      reason:
+        "Review funding needs and capacity for a proposed transfer or recapitalization, subject to credit evaluation.",
+      scope: "Business only",
+    });
+  if (
+    ["Family transfer", "ESOP", "Prepare / delayed exit"].includes(selected) ||
+    p.trigger === "Family succession" ||
+    p.successor !== "External sale preferred"
+  )
+    out.push({
+      team: "Succession Planning",
+      reason:
+        "Clarify successor readiness, governance and transition responsibilities before choosing a path.",
+      scope: "Business + personal",
+    });
+  return out;
+}
+export function transitionJourney(data) {
+  const p = data.profile ?? {};
+  const closed = data.outcomes?.closed === true;
+  const definitions = [
+    {
+      id: "discover",
+      label: "Clarify your goals",
+      route: "discovery",
+      done: !!p.business && !!p.trigger,
+    },
+    {
+      id: "prepare",
+      label: "Prepare and review",
+      route: "readiness",
+      done: !!data.review,
+    },
+    {
+      id: "choose",
+      label: "Compare transition paths",
+      route: "pathways",
+      done: !!data.pathDecision?.path,
+    },
+    {
+      id: "connect",
+      label: "Connect your team",
+      route: "referrals",
+      done: (data.referrals ?? []).some((r) =>
+        ["Accepted", "Completed"].includes(r.status),
+      ),
+    },
+    {
+      id: "wealth",
+      label: "Plan life beyond transition",
+      route: "plan",
+      done:
+        closed &&
+        (data.actions ?? []).filter((a) => a.kind === "Wealth planning")
+          .length > 0 &&
+        (data.actions ?? [])
+          .filter((a) => a.kind === "Wealth planning")
+          .every((a) => a.status === "Completed"),
+    },
+  ];
+  let currentAssigned = false;
+  return definitions.map(({ done, ...step }) => {
+    const status = done
+      ? "Complete"
+      : !currentAssigned
+        ? "Current"
+        : "Upcoming";
+    if (!done) currentAssigned = true;
+    return { ...step, status };
+  });
+}
+export function nextSteps(data, mode = "owner") {
+  const p = data.profile ?? {},
+    out = [];
+  const add = (id, title, detail, route, priority = "Normal") =>
+    out.push({ id, title, detail, route, priority });
+  if (mode === "advisor" && data.meeting?.status === "Requested")
+    add(
+      "meeting",
+      "Respond to the meeting request",
+      data.meeting.topic,
+      "overview",
+      "High",
+    );
+  if (!p.advisorEmail && mode === "owner")
+    add(
+      "advisor",
+      "Connect your relationship advisor",
+      "Choose a named advisor and approve sharing your transition case.",
+      "discovery",
+      "High",
+    );
+  if (
+    p.familyReadiness === "Conflict identified" ||
+    p.familyReadiness === "Needs discussion"
+  )
+    add(
+      "alignment",
+      "Prepare a family alignment conversation",
+      "Record different priorities before deciding who receives ownership or liquidity.",
+      "family",
+      "High",
+    );
+  if (!(data.stakeholders ?? []).length)
+    add(
+      "relationships",
+      "Map the people affected",
+      "Identify family participants, successors and trusted advisors, including the next generation.",
+      "family",
+    );
+  if (readiness(data).reported < evidenceLabels.length)
+    add(
+      "evidence",
+      mode === "owner"
+        ? "Gather your transition evidence"
+        : "Resolve evidence gaps with the owner",
+      "The checklist records availability and verification, not saleability.",
+      "readiness",
+    );
+  if (mode === "advisor" && !data.review)
+    add(
+      "review",
+      "Record findings and next steps",
+      "Review available evidence before qualifying the case or proposing a handoff.",
+      "readiness",
+      "High",
+    );
+  if (!data.pathDecision?.path)
+    add(
+      "path",
+      "Discuss a preferred transition path",
+      "Save an option and the reasons it fits your goals; an advisor still needs to review it.",
+      "pathways",
+    );
+  if (!data.familyPlan || (mode === "advisor" && !data.familyReview))
+    add(
+      "family",
+      mode === "advisor"
+        ? "Review family liquidity assumptions"
+        : "Explore the family continuity plan",
+      "Compare business ownership, other assets and family liquidity needs using explicit assumptions.",
+      "family",
+    );
+  if (
+    (data.referrals ?? []).some((r) => r.status === "Draft") &&
+    mode === "owner"
+  )
+    add(
+      "referral",
+      "Review the proposed specialist handoff",
+      "Confirm the named recipient, purpose and information scope before approving.",
+      "referrals",
+      "High",
+    );
+  if (
+    !data.actions?.some(
+      (a) => a.kind === "Wealth planning" && a.status === "Completed",
+    )
+  )
+    add(
+      "wealth",
+      "Connect your personal wealth plan",
+      "Discuss spending, investments, estate needs and family distributions before closing.",
+      "plan",
+    );
+  return out.sort(
+    (a, b) => (a.priority === "High" ? 0 : 1) - (b.priority === "High" ? 0 : 1),
+  );
+}
+export function portfolioPriority(
+  row,
+  today = new Date().toISOString().slice(0, 10),
+) {
+  const d = row.data ?? {},
+    m = { ...defaultManagement, ...d.management };
+  const open = (d.actions ?? []).filter((a) => a.status !== "Completed");
+  const overdue = open.filter((a) => a.due && a.due < today).length;
+  const reasons = [];
+  if (overdue)
+    reasons.push(`${overdue} overdue shared action${overdue === 1 ? "" : "s"}`);
+  if (m.nextContact && m.nextContact <= today)
+    reasons.push("Advisor follow-up is due");
+  if (d.meeting?.status === "Requested")
+    reasons.push("Owner meeting request needs a response");
+  if (d.profile?.familyReadiness === "Conflict identified")
+    reasons.push("Owner reported family disagreement");
+  if (!d.review) reasons.push("Discovery awaits advisor review");
+  const level =
+    overdue ||
+    (m.nextContact && m.nextContact <= today) ||
+    d.meeting?.status === "Requested" ||
+    d.profile?.familyReadiness === "Conflict identified"
+      ? "High"
+      : "Normal";
+  return {
+    level,
+    label:
+      level === "High"
+        ? "Needs attention"
+        : d.review
+          ? "In progress"
+          : "Awaiting review",
+    reasons,
+    overdue,
+    openActions: open.length,
+    stage: m.stage,
+    nextContact: m.nextContact,
+  };
 }
 export function newData(profile) {
   return {
@@ -224,6 +678,12 @@ export function newData(profile) {
     review: null,
     qualified: false,
     meeting: null,
+    familyPlan: null,
+    familyReview: null,
+    pathDecision: null,
+    valuationReview: null,
+    stakeholders: [],
+    management: { ...defaultManagement },
     referrals: [],
     actions: [
       {
@@ -266,7 +726,11 @@ export function access(row, user) {
 export function project(row, user) {
   const mode = access(row, user);
   if (!mode) fail("You do not have access to this case.", 403);
-  if (mode !== "specialist") return { ...row, mode };
+  if (mode !== "specialist") {
+    const data = structuredClone(row.data);
+    if (mode === "owner") delete data.management;
+    return { ...row, data, mode };
+  }
   const referrals = row.data.referrals.filter(
     (r) =>
       r.recipient === user.email.toLowerCase() &&

@@ -1,11 +1,12 @@
 {
-  "name": "pnc-nexus",
+  "name": "pnc-link",
   "version": "1.0.0",
   "description": "Connected owner, advisor, and specialist workflows for business transitions.",
   "scripts": {
     "test": "node --test tests/*.test.mjs",
     "typecheck": "tsc --noEmit",
-    "test:browser": "node tests/browser-smoke.mjs && node tests/browser-workflow.mjs"
+    "test:browser": "node tests/browser-smoke.mjs && node tests/browser-workflow.mjs && node tests/browser-planning.mjs",
+    "preview:ui": "node tests/preview-server.mjs"
   },
   "repository": {
     "type": "git",

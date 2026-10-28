@@ -1,3 +1,5 @@
+> Historical prototype audit. For the current `public/` application, see [the strategy and platform audit](docs/strategy-audit.md).
+
 # PNC NEXUS platform audit
 
 Date: October 27, 2026

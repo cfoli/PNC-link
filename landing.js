@@ -46,7 +46,7 @@
 
   const esc = (v) => String(v ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const img = (n) => `assets/img/home/${n}`;
-  const logo = `<a class="lp-logo" href="#/home"><img src="assets/img/nexus-logo.png" alt="PNC NEXUS"></a>`;
+  const logo = `<a class="lp-logo" href="#/home"><img src="assets/img/pnc-link-logo.svg" alt="PNC Link"></a>`;
 
   const ico = {
     search: `<svg width="22" height="22" viewBox="0 0 22 22" fill="none"><circle cx="9.5" cy="9.5" r="8" stroke="currentColor" stroke-width="2"/><path d="m15.5 15.5 5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`,
@@ -157,7 +157,7 @@
             <button class="lp-btn line" type="button" data-demo>Explore the demo account</button>
           </div>
         </form>
-        <div class="au-switch">${up ? 'Already have an account? <a href="#/signin">Sign in</a>' : 'New to PNC NEXUS? <a href="#/signup">Create an account</a>'}</div>
+        <div class="au-switch">${up ? 'Already have an account? <a href="#/signin">Sign in</a>' : 'New to PNC Link? <a href="#/signup">Create an account</a>'}</div>
         <a class="au-back" href="#/home">Back to home</a>
       </div></main>
     </div>`;

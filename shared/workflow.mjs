@@ -8,6 +8,12 @@ import {
   scenarioInput,
   readiness,
   access,
+  paths,
+  caseStages,
+  familyPlanInput,
+  dateInput,
+  stakeholderRoles,
+  stakeholderEngagementOptions,
 } from "./domain.mjs";
 export function mutate(row, user, op, payload, now = new Date().toISOString()) {
   const mode = access(row, user),
@@ -20,6 +26,7 @@ export function mutate(row, user, op, payload, now = new Date().toISOString()) {
   const invalidate = () => {
     d.review = null;
     d.qualified = false;
+    d.valuationReview = null;
     d.referrals = d.referrals.map((r) =>
       ["Draft", "Queued", "Accepted", "Completed"].includes(r.status)
         ? { ...r, status: "Withdrawn", withdrawnAt: now }
@@ -32,12 +39,106 @@ export function mutate(row, user, op, payload, now = new Date().toISOString()) {
     if (d.profile.advisorEmail === row.ownerEmail)
       fail("Choose a different account as your advisor.");
     invalidate();
+    d.familyReview = null;
     label = "Owner updated discovery and advisor sharing permission";
   } else if (op === "scenario") {
     requireMode("owner");
     d.scenario = scenarioInput(p);
     invalidate();
     label = "Owner updated working proceeds assumptions";
+  } else if (op === "familyPlan") {
+    requireMode("owner");
+    const plan = familyPlanInput(p);
+    if (JSON.stringify(plan) !== JSON.stringify(d.familyPlan)) {
+      d.familyPlan = plan;
+      d.familyReview = null;
+      invalidate();
+    }
+    label = "Owner updated family continuity assumptions";
+  } else if (op === "familyReview") {
+    requireMode("advisor");
+    if (!d.familyPlan)
+      fail("The owner must first save family planning assumptions.");
+    const note = text(p.note ?? "", 3000);
+    if (!note)
+      fail(
+        "Record family review findings and questions for qualified professionals.",
+      );
+    d.familyReview = { at: now, by: user.email, note };
+    label = "Advisor reviewed family continuity assumptions";
+  } else if (op === "pathDecision") {
+    requireMode("owner");
+    const path = text(p.path ?? "", 100),
+      reason = text(p.reason ?? "", 2000);
+    if (path && !paths.some((item) => item.name === path))
+      fail("Choose a supported transition path.");
+    if (path && !reason) fail("Explain why you want to discuss this path.");
+    if (
+      path !== (d.pathDecision?.path ?? "") ||
+      reason !== (d.pathDecision?.reason ?? "")
+    ) {
+      d.pathDecision = path ? { path, reason, at: now } : null;
+      invalidate();
+    }
+    label = "Owner recorded transition path discussion preference";
+  } else if (op === "valuationReview") {
+    requireMode("advisor");
+    const basis = text(p.basis ?? "", 3000);
+    if (!basis)
+      fail("Describe the valuation basis, source date and limitations.");
+    const low = number(p.low, 0, 1e12, "Lower business value"),
+      high = number(p.high, low, 1e12, "Upper business value");
+    d.valuationReview = { basis, low, high, at: now, by: user.email };
+    label = "Advisor recorded a preliminary business value perspective";
+  } else if (op === "caseManagement") {
+    requireMode("advisor");
+    if (!caseStages.includes(p.stage)) fail("Choose a supported case stage.");
+    d.management = {
+      stage: p.stage,
+      nextContact: dateInput(p.nextContact, "follow-up date"),
+      note: text(p.note ?? "", 3000),
+    };
+    label = "Advisor updated internal case coordination";
+  } else if (op === "stakeholder") {
+    requireMode("owner");
+    const people = d.stakeholders ?? [];
+    const id = p.id ? text(p.id, 100) : crypto.randomUUID();
+    const existing = people.findIndex((person) => person.id === id);
+    if (p.id && existing < 0) fail("Relationship entry not found.", 404);
+    if (existing < 0 && people.length >= 12)
+      fail("A case can include at most 12 relationship entries.");
+    const name = text(p.name ?? "", 200),
+      relationship = text(p.relationship ?? "", 200);
+    if (!name || !relationship)
+      fail("Enter the person's name and relationship.");
+    if (
+      !stakeholderRoles.includes(p.role) ||
+      !stakeholderEngagementOptions.includes(p.engagement)
+    )
+      fail("Choose supported participation and discussion preferences.");
+    const person = {
+      id,
+      name,
+      relationship,
+      role: p.role,
+      engagement: p.engagement,
+      notes: text(p.notes ?? "", 1500),
+    };
+    d.stakeholders = [...people];
+    if (existing >= 0) d.stakeholders[existing] = person;
+    else d.stakeholders.push(person);
+    d.familyReview = null;
+    invalidate();
+    label = "Owner updated family and trusted-advisor relationships";
+  } else if (op === "removeStakeholder") {
+    requireMode("owner");
+    const id = text(p.id ?? "", 100);
+    if (!(d.stakeholders ?? []).some((person) => person.id === id))
+      fail("Relationship entry not found.", 404);
+    d.stakeholders = d.stakeholders.filter((person) => person.id !== id);
+    d.familyReview = null;
+    invalidate();
+    label = "Owner removed a family or trusted-advisor relationship";
   } else if (op === "evidence") {
     if (!["owner", "advisor"].includes(mode)) fail("Not permitted.", 403);
     const e = d.evidence.find((e) => e.label === p.label);
@@ -188,8 +289,7 @@ export function mutate(row, user, op, payload, now = new Date().toISOString()) {
     if (!title || !assignee) fail("Enter an action and assignee.");
     if (d.actions.length >= 100)
       fail("This case has reached its action limit.");
-    if (due && !/^\d{4}-\d{2}-\d{2}$/.test(due))
-      fail("Choose a valid due date.");
+    dateInput(due, "due date");
     d.actions.push({
       id: crypto.randomUUID(),
       title,

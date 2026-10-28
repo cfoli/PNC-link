@@ -1,6 +1,16 @@
-# PNC NEXUS
+# PNC Link
 
-A connected business-transition workspace for owners, relationship advisors, and named specialist recipients. The deployed application is in `public/`; the original root-level prototype files are retained as historical source and are not published.
+A connected business-transition workspace for owners, relationship advisors, and named specialist recipients. The deployed application is in `public/`. Root `index.html` forwards repository-root previews to that same app. The original page is preserved as `legacy-prototype.html`; the older root-level scripts remain historical source and are not published.
+
+## Strategy and product audit
+
+[Strategy audit](docs/strategy-audit.md) maps the official competition rubric and supplied PNC research to baseline gaps, implementation acceptance criteria, the owner/advisor journeys, and a testable business thesis. The product focuses on coordinated early transition planning and family/wealth continuity across existing specialist capabilities.
+
+Owners receive prioritized next steps, contextual AI question preparation, structured successor/family/estate discovery, an editable relationship map, a saved transition direction, and a separate family liquidity illustration. Listed relationships receive no invitations or access. Equal-value shares are an optional illustration rather than a fairness recommendation; liquid assets are a subset of other assets, and hypothetical death benefits are separated from current cash.
+
+Advisors open a multi-client portfolio with search, stage/attention filters, sorting and explainable workflow signals. They can record private follow-up dates and relationship notes, review family assumptions, record a preliminary enterprise-value perspective with its basis, and prepare case-specific AI briefs. Portfolio signals use recorded requests and dates, not predictive inference. Private advisor management is omitted from owner and specialist API responses.
+
+The sample now demonstrates four fictional client relationships in the advisor view and one consistent owner journey. The role switch only operates within this read-only sample. Live roles remain assigned by administrators.
 
 ## Connected workflows
 
@@ -18,11 +28,11 @@ The proceeds model uses entered financials and hypothetical assumptions. It appl
 
 Netlify Identity handles signup, confirmation, login, recovery, invitations, and server-managed sessions. New signups are owners; clients cannot assign themselves advisor or specialist roles. A site administrator must invite staff and assign `advisor` or `specialist` in the Netlify project's Identity user settings. Then owners use the advisor's exact account email, and advisors use the specialist's exact account email for referrals. Role assignment alone does not provide access to every case.
 
-Previously simulated browser accounts and localStorage data are not imported. New live cases start empty and are saved in Netlify Database. The read-only sample uses a single explicitly fictional Bennett business in both owner and advisor views and never writes records or runs AI.
+Previously simulated browser accounts and localStorage data are not imported. New live cases start empty and are saved in Netlify Database. The read-only owner sample uses the fictional Bennett business; the advisor sample adds three fictional clients to demonstrate portfolio management. Samples never write records or run AI.
 
 ## AI support
 
-Owners and assigned advisors can ask questions with explicit consent to send case context through Netlify AI Gateway using `gpt-5.4-mini`. The assistant supports explanations, intake summaries, missing-information checks, option comparisons, meeting agendas, and suggested specialist conversations. It cannot mutate records, approve financing, contact buyers, send referrals, or replace professional advice. It does not have live market data or document access.
+Owners and assigned advisors can ask questions with explicit consent to send case context through Netlify AI Gateway using `gpt-5.4-mini`. The assistant supports explanations, intake summaries, missing-information checks, option comparisons, meeting agendas, and suggested specialist conversations. It cannot mutate records, approve financing, contact buyers, send referrals, or replace professional advice. It does not have live market data or document access. Owner guidance and advisor preparation use different instructions and curated, dated PNC background. Case fields are separate untrusted reference data. Up to four prior private turns are supplied for continuity. Consent covers family assumptions, stakeholder roles/notes, preferred paths and value perspectives; advisor AI also receives that advisor’s internal relationship notes. Explicit identity fields are omitted and emails are redacted, but free text can still identify people.
 
 Direct owner name and advisor email fields are omitted from the prompt, but free text may contain identifying information; the consent text explains this. Each user's transcript is private to that user, including when others can view the case. Requests are limited to 20 per account per hour and bounded in length and output. Provider failures surface as errors rather than fabricated answers.
 
@@ -47,13 +57,30 @@ npm run typecheck
 node --check public/workspace.js
 ```
 
-With the local server running and Playwright Chromium installed:
+For signed-out visual previews and browser tests without connected services:
+
+```sh
+npm run preview:ui
+```
+
+This serves `public/` at port 8889. It returns signed-out auth and rejects other API operations. It does not simulate a connected database or AI. Use Netlify dev for connected local development.
+
+With either local server running and the matching Playwright Chromium installed:
 
 ```sh
 node tests/browser-smoke.mjs
 node tests/browser-workflow.mjs
+node tests/browser-planning.mjs
 ```
 
-The domain/workflow tests cover access checks, consented scope projection, referral transitions and revocation, evidence qualification, financial shortfalls, role restrictions, and metrics with unknown outcomes. Browser smoke checks cover the real local server's public/sample screens and mobile overflow. The workflow browser test uses an isolated API transport and real workflow rules to verify frontend submission and rendering contracts; it does not exercise database persistence or provider inference. Live multi-account database and AI checks require a deployed migration and appropriately invited accounts.
+The domain/workflow/assistant tests cover structured discovery, family arithmetic, relationship access, private advisor notes, saved decisions, transparent portfolio signals, AI context boundaries, and access checks, consented scope projection, referral transitions and revocation, evidence qualification, financial shortfalls, role restrictions, and metrics with unknown outcomes. Browser smoke checks cover the real local server's public/sample screens and mobile overflow. The workflow and planning browser tests use an isolated API transport and real workflow rules to verify frontend submission, multi-client isolation and rendering contracts; they do not exercise database persistence or provider inference. Live multi-account database and AI checks require a deployed migration and appropriately invited accounts.
 
 Practice insights distinguish observed counts, acceptance time, advisor minutes, assets captured, and retention from unvalidated improvement hypotheses. Missing outcomes stay unknown, and recorded effort is not presented as time saved.
+
+New planning fields are stored in the existing versioned JSON case data. Old cases render with safe defaults; there is no schema change or new migration in this update. Updating owner discovery, scenario, family or relationship context invalidates stale reviews and active referrals; unchanged path/family saves preserve review. Advisor internal follow-up changes do not revoke owner consent.
+
+## Opening the updated app
+
+A server started from the repository root now forwards `/` to `/public/`, so the old prototype cannot silently appear as the current app. Public assets use relative paths for either publishing root. On an ordinary static server, unavailable APIs leave the public landing page and read-only samples accessible with an explicit preview notice. Saving records and live AI still require the connected Netlify services.
+
+Direct read-only walkthroughs: `/public/#/sample-owner` and `/public/#/sample-advisor` on a repository-root server, or `/#/sample-owner` and `/#/sample-advisor` when serving `public/` directly. Retired prototype routes open the current landing page.

@@ -67,14 +67,14 @@
     const resumeName = st.business || DEMO_BUSINESS;
     const guest = !window.ProBankAuth.current();
     return `
-    <div class="ob-top"><a class="ob-logo" href="#/home"><img src="assets/img/nexus-logo.png" alt="PNC NEXUS"></a>${guest
+    <div class="ob-top"><a class="ob-logo" href="#/home"><img src="assets/img/pnc-link-logo.svg" alt="PNC Link"></a>${guest
       ? '<a class="ob-skip" href="#/signin" style="margin-left:auto">SIGN IN</a>'
       : '<a class="ob-skip" href="#" data-signout style="margin-left:auto">SIGN OUT</a>'}</div>
     <div class="ob-body" style="max-width:900px">
-      <div class="ob-talk">${mascot}<div class="ob-bubble">Hi${st.name ? ' ' + esc(st.name.split(' ')[0]) : ''}! I'm your PNC NEXUS guide. Let's understand where your business is today.</div></div>
+      <div class="ob-talk">${mascot}<div class="ob-bubble">Hi${st.name ? ' ' + esc(st.name.split(' ')[0]) : ''}! I'm your PNC Link guide. Let's understand where your business is today.</div></div>
       <div style="text-align:center"><span class="ob-eyebrow">Quick start · About 5 minutes</span></div>
       <h1 class="ob-h1" style="margin-top:10px">Let's understand where you are.</h1>
-      <p class="ob-lead">PNC NEXUS turns a few honest answers into a clear picture: what your business may be worth, how ready it is, which paths could fit, and who at PNC can help. You stay in control of every answer.</p>
+      <p class="ob-lead">PNC Link turns a few honest answers into a clear picture: what your business may be worth, how ready it is, which paths could fit, and who at PNC can help. You stay in control of every answer.</p>
       <div class="ob-steps">
         <div class="ob-step"><div class="num" style="background:#1814F3">01</div><h3>Share what you know</h3><p>Short questions, cards and sliders. Skip anything.</p></div>
         <div class="ob-step"><div class="num" style="background:#16DBCC">02</div><h3>See your picture</h3><p>Preliminary value range, readiness and pathways.</p></div>

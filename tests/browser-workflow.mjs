@@ -145,6 +145,16 @@ for (const label of ["Financial statements", "Ownership and debt schedule"]) {
 }
 const advisor = await open("advisor");
 await advisor
+  .getByRole("heading", {
+    name: "A clearer view of every client.",
+    exact: true,
+  })
+  .waitFor();
+await advisor
+  .locator("#portfolio-results")
+  .getByRole("button", { name: "Open client", exact: true })
+  .click();
+await advisor
   .getByRole("heading", { name: "Malik <Tools> & Family", exact: true })
   .waitFor();
 await advisor
@@ -229,7 +239,9 @@ await owner
   .getByLabel("Your question", { exact: true })
   .fill("What should I ask my advisor?");
 await owner.getByLabel("I agree to share this case", { exact: false }).check();
-await owner.getByRole("button", { name: "Ask NEXUS AI", exact: true }).click();
+await owner
+  .getByRole("button", { name: "Ask PNC Link AI", exact: true })
+  .click();
 await owner
   .locator(".chat-message")
   .filter({

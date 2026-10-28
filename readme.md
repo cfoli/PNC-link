@@ -1,4 +1,4 @@
-# PNC Link
+# PNC-link
 
 A connected business-transition workspace for owners, relationship advisors, and named specialist recipients. The deployed application is in `public/`. Root `index.html` forwards repository-root previews to that same app. The original page is preserved as `legacy-prototype.html`; the older root-level scripts remain historical source and are not published.
 
@@ -23,6 +23,10 @@ Advisors propose specialist referrals with a named account, purpose, and scope. 
 Both primary workspaces show the same case, meeting status, shared actions, and referral milestones. Owners update their own actions; advisors coordinate team actions and record observed effort and closing outcomes. Seven transition alternatives cover strategic sale, PE with rollover, family transfer, management transfer, ESOP, recapitalization, and preparation/delayed exit. Discussion prompts follow transparent rules, not inferred suitability scores.
 
 The proceeds model uses entered financials and hypothetical assumptions. It applies debt and fees before owner share, rollover, simplified tax, and family distributions. It explicitly reports negative proceeds and debt shortfalls. It is not a certified valuation, market-data product, or tax model. Wealth, estate, investment-policy and distribution conversations are connected through shared actions and approved Private Bank referrals.
+
+## Guest portal
+
+Choose **Get started** or **Skip signup — enter portal** to open an editable owner portal without an account or connected services. Guest discovery, planning, evidence and relationship changes are saved in this browser’s localStorage and resume after refresh. Clearing browser data removes the guest case. Guest data is not uploaded or automatically imported into an account. Advisor sharing, meeting requests and live AI require a connected account. The logo assets are unchanged.
 
 ## Identity and access
 
